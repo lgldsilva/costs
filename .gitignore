@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+junit.xml
+
+# Dados locais (nao versionar: o banco e a memoria historica; backup em ~/.local/share/costs)
+store.sqlite
+store.sqlite-*
+store.sqlite.*
+prices.json
+*.log
+
+# Local do harness
+.claude/
+.mimosa/
+.DS_Store
+
+# Rust
+target/
+
+# local personal config
+/config.toml

@@ -1,0 +1,114 @@
+# Provedor pelo nome canonico do modelo (minusculo, sem prefixo de rota, sem "-free").
+# A primeira regra que casar (re.search) vence. Sem casamento: "outro".
+# Editar aqui; nao precisa mexer no codigo.
+
+[[rules]]
+match = "^antigravity-claude"
+provider = "anthropic"
+
+[[rules]]
+match = "^(claude|anthropic)"
+provider = "anthropic"
+
+[[rules]]
+match = "^(gpt|o[0-9]|codex|chatgpt)"
+provider = "openai"
+
+[[rules]]
+match = "^(glm|z-ai)"
+provider = "zhipu"
+
+[[rules]]
+match = "^(kimi|k3|moonshot)"
+provider = "moonshot"
+
+[[rules]]
+match = "^deepseek"
+provider = "deepseek"
+
+[[rules]]
+match = "^grok"
+provider = "xai"
+
+[[rules]]
+match = "^(gemini|antigravity-gemini)"
+provider = "google"
+
+[[rules]]
+match = "^minimax"
+provider = "minimax"
+
+[[rules]]
+match = "^qwen"
+provider = "alibaba"
+
+[[rules]]
+match = "^muse"
+provider = "meta"
+
+[[rules]]
+match = "^mimo"
+provider = "xiaomi"
+
+[[rules]]
+match = "^composer"
+provider = "cursor"
+
+# Overrides de preco: nome canonico (como no banco) -> id no OpenRouter.
+# O `costs prices` resolve sozinho o resto (slug exato, prefixo de harness,
+# sufixos -high/-fast/-preview/-build e, por ultimo, o irmao mais proximo do
+# mesmo provedor). Use estas entradas quando o nome do harness nao casar com o
+# catalogo ou quando o irmao escolhido estiver errado. Chave de provedor/rota
+# `:free` nunca entra na conta (custo zero).
+[[price_map]]
+model = "claude-opus-5-5"
+openrouter = "anthropic/claude-opus-5.5"
+
+[[price_map]]
+model = "claude-opus-5"
+openrouter = "anthropic/claude-opus-5"
+
+[[price_map]]
+model = "claude-haiku-5-5"
+openrouter = "anthropic/claude-haiku-5.5"
+
+[[price_map]]
+model = "claude-sonnet-5-5"
+openrouter = "anthropic/claude-sonnet-5.5"
+
+[[price_map]]
+model = "claude-sonnet-5"
+openrouter = "anthropic/claude-sonnet-5"
+
+[[price_map]]
+model = "claude-sonnet-4-6"
+openrouter = "anthropic/claude-sonnet-4.6"
+
+# Nomes de harness sem slug equivalente no catalogo.
+[[price_map]]
+model = "kimi-for-coding"
+openrouter = "moonshotai/kimi-k2.7-code"
+
+[[price_map]]
+model = "kimi-for-coding-highspeed"
+openrouter = "moonshotai/kimi-k2.7-code"
+
+[[price_map]]
+model = "k3"
+openrouter = "moonshotai/kimi-k3"
+
+[[price_map]]
+model = "k3-256k"
+openrouter = "moonshotai/kimi-k3"
+
+[[price_map]]
+model = "qwen3.8-max"
+openrouter = "qwen/qwen3.8-max-0902"
+
+[[price_map]]
+model = "qwen3.8-max-preview"
+openrouter = "qwen/qwen3.8-max-0902"
+
+[[price_map]]
+model = "deepseek-flash"
+openrouter = "deepseek/deepseek-v4.1-flash"

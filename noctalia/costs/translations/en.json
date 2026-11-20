@@ -1,0 +1,6 @@
+{
+  "settings.costs_bin.label": "Costs binary",
+  "settings.costs_bin.description": "Costs executable (default: costs on PATH).",
+  "settings.refresh_minutes.label": "Refresh interval (minutes)",
+  "settings.refresh_minutes.description": "How often the widget re-reads the status; quota APIs are only called past their cache TTL."
+}

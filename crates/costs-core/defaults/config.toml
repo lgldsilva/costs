@@ -1,0 +1,14 @@
+# Built-in defaults used when the user config does not exist.
+# Personalize via config.toml in the platform config dir (or $COSTS_HOME).
+agents = ["claude", "codex", "opencode"]
+
+[quota]
+ai_usage = "~/.config/ai-standards/statusline/usage/ai-usage"
+horizon = "24h"
+providers = []
+
+[quota.cost_map]
+
+[[hosts]]
+name = "local"
+kind = "local"

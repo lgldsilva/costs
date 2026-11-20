@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 16576a80fd7044ffa48ba20f749db8240ab9630612cb4fdf456645faa01f4412 # shrinks to (old, r) = (Stored { tokens: 0, cost: None, basis: "estimated", model_raw: "m", provider: "y" }, Row { host: "h", agent: "a", date: "2026-10-09", model: "m", model_raw: "m", provider: "y", input: 0, output: 0, cache_read: 0, cache_write: 0, cost_usd: Some(0.0), cost_basis: "free" })

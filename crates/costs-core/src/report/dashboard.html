@@ -1,0 +1,284 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Costs · consumo de IA</title><style>
+:root{--ink:#172c40;--paper:#f1f5f9;--blue:#2563a6;--teal:#167d88;--cache:#8c70ad;--line:#dce4ed;--muted:#52677c;--warn:#9b471b}*{box-sizing:border-box;min-width:0}body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1440px;margin:auto;padding:24px 32px}header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}h1{font-size:22px;letter-spacing:-.6px;margin:0}h2{font-size:16px;margin:0 0 12px}h3{font-size:14px;margin:0}p{overflow-wrap:anywhere;margin:8px 0}small,.muted,.caption{color:var(--muted)}.caption{font-size:12px}section{margin:16px 0}.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px;overflow-wrap:anywhere}.toolbar{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px}.date-controls,.filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}label{display:block;font-size:12px;color:var(--muted)}button,select,input{font:inherit;padding:8px 10px;border:1px solid #c6d2df;border-radius:6px;background:#fff;color:var(--ink);max-width:100%}input,select{width:100%;display:block;margin-top:5px}select{text-overflow:ellipsis}button{cursor:pointer}button:hover{background:#eaf2fa}:focus-visible{outline:3px solid var(--blue);outline-offset:2px}.filter-bottom{display:flex;align-items:center;gap:16px;margin-top:12px;flex-wrap:wrap}.filter-bottom label{flex:1;max-width:420px}.filter-bottom input{margin-top:0}.filter-bottom details{flex-basis:100%;margin:0}.filters{margin:12px 0}.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.kpis>.card{padding:16px 18px}.kpis strong{font:600 clamp(23px,2.5vw,32px)/1.25 ui-monospace,SFMono-Regular,Consolas,monospace;display:block;margin:6px 0}.kpis>.card:first-child{border-top:3px solid var(--blue)}.peaks{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;background:#e5edf5;padding:12px 18px;border-radius:8px}.peak small{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}.peak-date{display:block;font-size:12px;color:var(--muted);margin:4px 0}.peak-value{display:block;font:600 14px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}.analytics{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:16px;align-items:start}.analytics>section{margin:0}.chart-header{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin:10px 0 16px}.legend i{display:inline-block;width:9px;height:9px;margin-right:5px;border-radius:2px}.axis{display:grid;grid-template-columns:76px minmax(0,1fr) 118px;gap:12px;font-size:10px;color:var(--muted);padding-bottom:8px;border-bottom:1px solid var(--line)}.axis-scale{display:flex;justify-content:space-between}.day{display:grid;grid-template-columns:76px minmax(0,1fr) 118px;gap:12px;align-items:center;padding:7px 0;border-bottom:1px solid #edf1f6}.day button{border:0;background:none;padding:0;text-align:left;font:12px ui-monospace,monospace;color:var(--blue)}.day small{font:10px/1.5 ui-monospace,monospace;text-align:right;overflow-wrap:anywhere}.bar{height:5px;background:var(--blue);margin:3px 0;border-radius:0 2px 2px 0;min-width:0}.tokens{background:var(--teal)}.cache{background:var(--cache)}.ranking{border-bottom:1px solid var(--line);padding:10px 0}.ranking-name{display:flex;justify-content:space-between;gap:12px;font-size:12px}.ranking-name span:first-child{overflow-wrap:anywhere}.ranking-name span:last-child{white-space:nowrap;font-family:ui-monospace,monospace}progress{display:block;width:100%;height:5px;margin-top:7px;accent-color:var(--blue)}#breakdowns>.card{border:0;padding:0;background:transparent}#breakdowns details{margin:16px 0 0}.warning{color:var(--warn);font-size:12px;border-left:3px solid #d69761;padding-left:10px}.scroll{overflow:auto;max-width:100%;border:1px solid var(--line);border-radius:6px}table{border-collapse:collapse;width:100%;font-size:12px}td,th{padding:11px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}th{background:#f4f7fa;font-size:11px;color:var(--muted);font-weight:600}td:not(:first-child){font-family:ui-monospace,monospace}tbody tr:hover{background:#f7fafe}.badge{display:inline-block;border-radius:4px;background:#fff0de;color:#854015;font:600 10px/1.4 system-ui,sans-serif;padding:3px 7px}.badge.estimate{color:#17616c;background:#e1f1f1}details{font-size:12px;color:var(--muted);margin:12px 0}summary{cursor:pointer;font-weight:600;color:var(--ink)}details.card{margin:16px 0}details.card>summary{font-size:15px}#hardScope{font-size:12px;color:var(--blue)}#freshness p{padding:10px 0;border-bottom:1px solid var(--line)}#missing{margin:12px 0}#dateError:empty,#empty:empty{display:none}
+@media(max-width:1000px){main{padding:20px}.peaks{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}}@media(max-width:760px){header{display:block}.date-controls,.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics{grid-template-columns:minmax(0,1fr)}.kpis strong{font-size:26px}}@media(max-width:420px){main{padding:14px}.card,.toolbar{padding:14px}.peaks{gap:14px;padding:12px}.peak-value{font-size:12px}.axis,.day{grid-template-columns:42px minmax(0,1fr) 92px;gap:8px}.day small{font-size:9px}.legend{gap:10px}.filter-bottom label{flex-basis:100%}h1{font-size:20px}}
+/* Hidden is semantic state, not layout: override all author display rules. */
+[hidden] { display: none !important; }
+</style><main>
+<header><div><h1>Costs · consumo de IA</h1><p class="caption">Estimativa equivalente a preços de API · não é uma fatura</p></div><p id="period" class="caption"></p></header>
+<section class="toolbar" aria-label="Filtros do relatório"><div class="date-controls"><label>Mês<input type="month" id="month"></label><label>Período<select id="preset"><option value="month">Mês selecionado</option><option value="last30">Últimos 30 dias</option><option value="thisweek">Esta semana</option><option value="lastweek">Semana anterior</option><option value="custom">Personalizado</option></select></label><label id="fromControl">De<input type="date" id="from"></label><label id="toControl">Até<input type="date" id="to"></label></div><p id="dateError" role="alert"></p><div class="filter-bottom"><details open><summary>Provedor, harness, máquina e modelo</summary><div id="filters" class="filters"></div><p id="hardScope"></p></details><button id="reset">Limpar filtros</button><label><input id="search" type="search" aria-label="Buscar nas linhas" placeholder="Buscar modelo, máquina ou data…"></label></div></section>
+<section id="kpis" class="kpis" aria-label="Resumo de consumo"></section><p id="missing" class="warning"></p><p id="empty"></p>
+<div class="analytics"><section class="card"><div class="chart-header"><h2>Consumo diário</h2><span class="caption">Selecione uma data para detalhar</span></div><div class="legend"><span><i style="background:var(--blue)"></i>USD estimado</span><span><i style="background:var(--teal)"></i>Tokens totais</span><span><i style="background:var(--cache)"></i>Cache incluído nos tokens</span></div><div id="daily"></div></section><section class="card"><h2>Distribuição do consumo</h2><div id="breakdowns"></div></section></div>
+<section class="card"><div class="chart-header"><h2>Planos e mensalidades</h2><span class="badge estimate">Estimativa · atribuição limitada</span></div><p class="caption">Uso do escopo selecionado vs. taxa mensal integral. Não representa economia real ou cobertura garantida.</p><div class="scroll"><table><thead><tr><th>Plano</th><th>Taxa USD/mês</th><th>API equivalente / confiança</th><th>Uso − taxa</th><th>Razão</th><th>Equilíbrio</th></tr></thead><tbody id="plans"></tbody></table></div><details><summary>Premissas e limites da comparação</summary><p>Mês parcial sem rateio da mensalidade; períodos com mais de um mês calendário são inconclusivos. Valores assumidos em USD/mês: confirme especialmente a moeda de z.ai. Não identificamos chaves API, cobertura de planos ou atribuição por harness. OpenCode Go sem atribuição confiável é inconclusivo. Sem dados não significa fatura zero.</p></details></section>
+<details class="card"><summary>Detalhe diário · linhas registradas</summary><p id="scope"></p><div class="scroll"><table><thead><tr><th>Data</th><th>Máquina</th><th>Harness</th><th>Provedor</th><th>Modelo</th><th>Entrada</th><th>Saída</th><th>Cache leitura</th><th>Cache escrita</th><th>USD estimado</th></tr></thead><tbody id="rows"></tbody></table></div></details>
+<details class="card"><summary>Estado das coletas por máquina e agente</summary><div id="freshness"></div><p>Limite de atraso: 2 horas desde o último sucesso, relativo à geração deste arquivo. Uma máquina atrasada não indica que as demais pararam. Sucesso de coleta não comprova atualização da fonte; collected_at não é usado. Sem registro ou erro: frescor incompleto.</p></details>
+<details class="card"><summary>Metodologia e leitura dos gráficos</summary><p>Arquivo offline, sem conexões externas. Dias seguem o calendário local da máquina geradora e as datas de uso registradas, sem conversão de fuso. Semanas começam segunda-feira; semanas cortadas pelo período são parciais. Picos de custo e tokens são independentes; empates usam a data mais antiga. Cache faz parte dos tokens totais, não é gasto adicional. As barras de USD e tokens usam escalas próprias; a legenda de cada escala mostra o máximo do período.</p></details>
+</main>
+<script>
+'use strict';
+const data=/*PAYLOAD*/null;
+const $=id=>document.getElementById(id),dims=['provider','agent','host','model'],labels={provider:'Provedor',agent:'Harness / agente',host:'Máquina',model:'Modelo'};
+const money=n=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'USD'}).format(n),num=n=>new Intl.NumberFormat('pt-BR',{maximumFractionDigits:2}).format(n),sum=(rows,key)=>rows.reduce((a,r)=>a+(r[key]||0),0),tokens=r=>(r.input||0)+(r.output||0)+(r.read||0)+(r.write||0);
+const compact=n=>{for(const [scale,suffix] of [[1e9,'bi'],[1e6,'mi'],[1e3,'mil']]){if(Math.abs(n)>=scale){return num(n/scale)+' '+suffix}}return num(n)};
+function node(tag,text,parent,cls){
+ const el=document.createElement(tag);
+ if(text!==undefined){el.textContent=text}
+ if(cls){el.className=cls}
+ if(parent){parent.append(el)}
+ return el
+}
+function cells(parent,values){
+ const tr=node('tr',undefined,parent);
+ values.forEach(v=>{node('td',v,tr)})
+}
+function clear(id){$(id).replaceChildren();return $(id)}
+let selectedDay='';
+const displayDate=s=>s?s.split('-').reverse().join('/'):'—',shortDate=s=>s?s.slice(5).split('-').reverse().join('/'):'—';
+const iso=d=>d.toISOString().slice(0,10),date=s=>new Date(s+'T12:00:00Z'),add=(s,n)=>{const d=date(s);d.setUTCDate(d.getUTCDate()+n);return iso(d)},monday=s=>add(s,-((date(s).getUTCDay()+6)%7));
+$('month').value=data.month;
+ let hardScopeText='';
+ if(data.hardScope){hardScopeText='Escopo fixo da exportação (não pode ser ampliado aqui): '+data.hardScope}
+ $('hardScope').textContent=hardScopeText;
+ $('hardScope').hidden=!data.hardScope;
+function period(){
+ const p=$('preset').value,t=data.today;
+ if(p==='custom'){return[$('from').value,$('to').value]}
+ if(p==='last30'){return[add(t,-29),t]}
+ if(p==='thisweek'){return[monday(t),t]}
+ if(p==='lastweek'){
+  const previousMonday=add(monday(t),-7);
+  const previousSunday=add(monday(t),-1);
+  return[previousMonday,previousSunday]
+ }
+ const m=$('month').value;
+ if(!m){return['','']}
+ const d=date(m+'-01');d.setUTCMonth(d.getUTCMonth()+1);
+ return[m+'-01',add(iso(d),-1)]
+}
+if(data.range){
+ $('preset').value='custom';[$('from').value,$('to').value]=data.range;
+ const m=data.month,d=date(m+'-01');d.setUTCMonth(d.getUTCMonth()+1);
+ const isFullMonth=data.range[0]===m+'-01'&&data.range[1]===add(iso(d),-1);
+ if(isFullMonth){$('preset').value='month'}
+}
+function dateControls(){
+ const custom=$('preset').value==='custom';
+ for(const id of ['from','to']){$(id).disabled=!custom}
+ $('fromControl').hidden=!custom;
+ $('toControl').hidden=!custom
+}
+$('month').addEventListener('change',()=>{
+ $('preset').value='month';selectedDay='';render()
+});
+$('preset').addEventListener('change',()=>{
+ const needsDefaultDates=$('preset').value==='custom'&&(!$('from').value||!$('to').value);
+ if(needsDefaultDates){[$('from').value,$('to').value]=[data.month+'-01',data.today]}
+ selectedDay='';render()
+});
+for(const id of ['from','to']){
+ $(id).addEventListener('change',()=>{selectedDay='';render()})
+}
+
+for(const dim of dims){
+ const label=node('label',labels[dim]+' ', $('filters'));const select=node('select',undefined,label);select.id=dim;
+ node('option','Todos',select).value='';
+ for(const value of [...new Set(data.rows.map(r=>r[dim]))].sort()){node('option',value,select).value=value}
+ select.addEventListener('change',()=>{selectedDay='';render()})
+}
+$('search').addEventListener('input',render);
+$('reset').onclick=()=>{
+ dims.forEach(d=>{$(d).value=''});
+ $('search').value='';selectedDay='';render()
+};
+function selectedRows(start,end){
+ const query=$('search').value.toLocaleLowerCase('pt-BR');
+ return data.rows
+  .filter(r=>start&&end&&start<=end&&r.date>=start&&r.date<=end)
+  .filter(r=>dims.every(d=>!$(d).value||r[d]===$(d).value))
+  .filter(r=>!query||[r.date,...dims.map(d=>r[d])].join(' ').toLocaleLowerCase('pt-BR').includes(query))
+}
+function groupRows(rows,key){
+ const groups=new Map();
+ for(const row of rows){
+  const group=key(row);
+  if(!groups.has(group)){groups.set(group,[])}
+  groups.get(group).push(row)
+ }
+ return groups
+}
+const costMetric=rs=>sum(rs,'cost'),tokenMetric=rs=>rs.reduce((a,r)=>a+tokens(r),0);
+function rankedGroups(groups,metric){return [...groups].sort((a,b)=>metric(b[1])-metric(a[1])||a[0].localeCompare(b[0]))}
+function peakLabel(groups,metric,week,start,end){
+ const ranked=rankedGroups(groups,metric);
+ if(!ranked.length){return 'Indisponível'}
+ const [key,rs]=ranked[0],last=add(key,6);
+ const partial=week&&(key<start||last>end);
+ let label=key;
+ if(week){label=key+' → '+last+(partial?' (parcial)':'')}
+ let value;
+ if(metric===costMetric){value=money(metric(rs))}
+ else{value=compact(metric(rs))+' tokens · cache '+compact(sum(rs,'read')+sum(rs,'write'))}
+ return label+' · '+value
+}
+function renderKpis(rows,daily,weekly,cost,missing,start,end){
+ const totalTokens=tokenMetric(rows);
+ const planFees=data.plans.reduce((a,p)=>a+(Number.isFinite(p.fee)?p.fee:0),0);
+ let recordedCost='Sem dados';
+ if(rows.length){recordedCost=money(cost)}
+ const cards=[
+  ['API equivalente registrada',recordedCost,''],
+  ['Tokens totais',compact(totalTokens),num(totalTokens)+' tokens'],
+  ['Dias ativos',daily.size,''],
+  ['Taxas mensais configuradas',money(planFees),'Soma integral em USD/mês, não rateada; não indica cobertura do uso']
+ ];
+ clear('kpis');
+ for(const [label,value,exact] of cards){
+  const card=node('div',undefined,$('kpis'),'card');node('small',label,card);
+  const strong=node('strong',String(value),card);
+  if(exact){
+   strong.title=exact;
+   strong.setAttribute('aria-label',exact)
+  }
+ }
+ const peaks=node('div',undefined,$('kpis'),'peaks');
+ const descriptions=[['Dia: maior custo estimado',daily,costMetric,false],['Dia: mais tokens',daily,tokenMetric,false],['Semana: maior custo estimado',weekly,costMetric,true],['Semana: mais tokens',weekly,tokenMetric,true]];
+ for(const [label,groups,metric,week] of descriptions){
+  const card=node('div',undefined,peaks,'peak');node('small',label,card);
+  const [dates,...values]=peakLabel(groups,metric,week,start,end).split(' · ');
+  const displayedDates=dates.replace(/\d{4}-\d{2}-\d{2}/g,displayDate);
+  const dateLabel=node('span',displayedDates,card,'peak-date');dateLabel.title=dates;
+  const value=node('span',values.join(' · '),card,'peak-value');
+  const ranked=rankedGroups(groups,metric);
+  if(ranked.length){
+   const rs=ranked[0][1];
+   if(metric===costMetric){value.title=money(metric(rs))}
+   else{value.title=num(metric(rs))+' tokens; cache '+num(sum(rs,'read')+sum(rs,'write'))}
+   value.setAttribute('aria-label',value.title)
+  }
+ }
+ $('missing').textContent=missing.length+' linhas sem preço · '+num(missing.reduce((a,r)=>a+tokens(r),0))+' tokens não precificados. Totais monetários são parciais quando faltam preços.';
+ if(rows.length){$('empty').textContent=''}
+ else{$('empty').textContent='Sem dados neste escopo. Ajuste filtros ou rode costs sync; ausência não é custo zero.'}
+}
+function renderDaily(daily){
+ clear('daily');
+ const maxCost=Math.max(1,...[...daily.values()].map(r=>sum(r,'cost')));
+ const maxTokens=Math.max(1,...[...daily.values()].map(tokenMetric));
+ const axis=node('div',undefined,$('daily'),'axis');node('span','Dia',axis);
+ const scale=node('div',undefined,axis,'axis-scale');node('span','0',scale);node('span','máx. do período',scale);node('span','USD / tokens',axis);
+ node('p','Escalas: USD 0–'+money(maxCost)+' · tokens 0–'+compact(maxTokens),$('daily'),'caption');
+ for(const [day,rs] of [...daily].sort((a,b)=>a[0].localeCompare(b[0]))){
+  const line=node('div',undefined,$('daily'),'day');const button=node('button',shortDate(day),line);button.title=day;
+  button.onclick=()=>{
+   if(selectedDay===day){selectedDay=''}else{selectedDay=day}
+   render();
+   const details=$('scope').closest?.('details');
+   if(details){details.open=true}
+   $('scope').scrollIntoView({behavior:'auto'})
+  };
+  const bars=node('div',undefined,line);
+  node('div',undefined,bars,'bar').style.width=(100*sum(rs,'cost')/maxCost)+'%';
+  node('div',undefined,bars,'bar tokens').style.width=(100*tokenMetric(rs)/maxTokens)+'%';
+  node('div',undefined,bars,'bar cache').style.width=(100*(sum(rs,'read')+sum(rs,'write'))/maxTokens)+'%';
+  node('small',money(sum(rs,'cost'))+' · '+compact(tokenMetric(rs))+' tokens; cache '+compact(sum(rs,'read')+sum(rs,'write')),line)
+ }
+}
+function renderBreakdowns(rows,cost){
+ clear('breakdowns');
+ for(const dim of dims){
+  let parent;
+  if(dim==='provider'){
+   parent=$('breakdowns');node('h3','Por provedor',parent)
+  }else{
+   parent=node('details',undefined,$('breakdowns'));node('summary',labels[dim],parent)
+  }
+  const grouped=new Map();
+  for(const row of rows){grouped.set(row[dim],(grouped.get(row[dim])||0)+(row.cost||0))}
+  for(const [name,value] of [...grouped].sort((a,b)=>b[1]-a[1])){
+   const ranking=node('div',undefined,parent,'ranking'),line=node('div',undefined,ranking,'ranking-name');
+   node('span',name,line);node('span',money(value),line);
+   const progress=node('progress',undefined,ranking);progress.max=Math.max(1,cost);progress.value=value;progress.setAttribute('aria-label',name)
+  }
+ }
+}
+function comparisonStatus(start,end,plan,rows){
+ const unknown=start.slice(0,7)!==end.slice(0,7)||plan.inconclusive||!rows.length||rows.some(r=>r.cost===null)||!Number.isFinite(plan.fee)||plan.fee<=0;
+ return {unknown,usage:sum(rows,'cost')}
+}
+function renderPlans(rows,start,end){
+ clear('plans');
+ for(const plan of data.plans){
+  const matched=rows.filter(r=>plan.providers.includes(r.provider));
+  const {unknown,usage}=comparisonStatus(start,end,plan,matched);
+  let difference='—',ratio='—',balance='—',confidence='INCONCLUSIVO';
+  if(!unknown){
+   difference=(usage-plan.fee>=0?'+':'')+money(usage-plan.fee);
+   ratio=num(usage/plan.fee)+'×';balance=num(100*usage/plan.fee)+'%';
+   confidence=money(usage)
+  }
+  cells($('plans'),[plan.name,money(plan.fee),confidence,difference,ratio,balance]);
+  const valueCell=$('plans').children[$('plans').children.length-1].children[2];valueCell.replaceChildren();
+  if(!unknown){node('span',money(usage)+' ',valueCell)}
+  const confidenceLabel=unknown?'INCONCLUSIVO':'Estimado';
+  const confidenceClass=unknown?'badge':'badge estimate';
+  node('span',confidenceLabel,valueCell,confidenceClass)
+ }
+}
+function freshnessEntries(){
+ const entries=new Map();
+ for(const entry of [...data.expected,...data.rows,...data.runs]){
+  const key=JSON.stringify([entry.host,entry.agent]);
+  if(!entries.has(key)){entries.set(key,entry)}
+ }
+ return [...entries.values()]
+}
+function freshnessAge(success){
+ if(!success){return Number.NaN}
+ return (Date.parse(data.generatedAt)-Date.parse(success))/1000
+}
+function freshnessState(run,stale){
+ if(!run){return 'Sem registro: frescor incompleto'}
+ if(run.status!=='ok'){return 'Erro: frescor incompleto'}
+ if(stale){return 'Desatualizado: frescor incompleto'}
+ return 'Tentativa recente (não comprova atualização da fonte)'
+}
+function freshnessLine(entry){
+ const run=data.runs.find(r=>r.host===entry.host&&r.agent===entry.agent);
+ const success=run?run.lastSuccess:null;
+ const age=freshnessAge(success);
+ const stale=!Number.isFinite(age)||age<0||age>7200;
+ const state=freshnessState(run,stale);
+ const source=run?run.ts+' · '+run.status+' · '+run.message:'Sem registro';
+ const agent=entry.agent||'host (não comprova cada agente)';
+ const lastSuccess=success||'Sem registro';
+ const ageText=Number.isFinite(age)?' · '+Math.max(0,Math.floor(age/60))+' minutos desde o sucesso':'';
+ const freshnessClass=stale||!run||run.status!=='ok'?'warning':'';
+ const text=entry.host+' / '+agent+' · '+state+' · Último sucesso: '+lastSuccess+' · Última tentativa: '+source+ageText;
+ node('p',text,$('freshness'),freshnessClass)
+}
+function renderFreshness(){
+ clear('freshness');
+ node('p','Gerado em: '+data.generatedAt+' · limite de atraso: 2 horas',$('freshness'));
+ for(const entry of freshnessEntries()){freshnessLine(entry)}
+}
+function renderRows(rows){
+ clear('rows');
+ if(selectedDay){$('scope').textContent='Data selecionada: '+displayDate(selectedDay)+' (clique novamente para remover)'}
+ else{$('scope').textContent='Todas as datas do escopo'}
+ for(const row of rows.filter(r=>!selectedDay||r.date===selectedDay)){
+  cells($('rows'),[displayDate(row.date),row.host,row.agent,row.provider,row.model,num(row.input),num(row.output),num(row.read),num(row.write),row.cost===null?'Sem preço':money(row.cost)])
+ }
+}
+function render(){
+ dateControls();
+ const [start,end]=period();
+ let dateError='';
+ if(!start||!end||start>end){dateError='Selecione um período válido, início antes do fim.'}
+ $('dateError').textContent=dateError;
+ $('period').textContent=displayDate(start)+' → '+displayDate(end);
+ const rows=selectedRows(start,end),cost=sum(rows,'cost'),missing=rows.filter(r=>r.cost===null);
+ const daily=groupRows(rows,r=>r.date),weekly=groupRows(rows,r=>monday(r.date));
+ renderKpis(rows,daily,weekly,cost,missing,start,end);
+ renderDaily(daily);renderBreakdowns(rows,cost);renderPlans(rows,start,end);renderFreshness();renderRows(rows)
+}
+render();
+</script></html>

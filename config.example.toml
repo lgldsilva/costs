@@ -1,0 +1,34 @@
+# Example configuration — copy to your platform config dir
+# (Linux: ~/.config/costs/config.toml · macOS: ~/Library/Application Support/costs/)
+# or set COSTS_HOME=<dir> and use <dir>/config.toml.
+# Agents collected by default on every host.
+agents = ["claude", "codex", "opencode"]
+
+# Optional: quota/balance windows read from an external `ai-usage` binary.
+# [quota]
+# ai_usage = "~/.config/ai-standards/statusline/usage/ai-usage"
+# horizon = "24h"
+# providers = ["claude", "codex"]
+#
+# [quota.cost_map]
+# claude = "anthropic"
+# codex = "openai"
+
+# Hosts to consolidate. `local` is the machine running `costs`;
+# `ssh` hosts run `costs collect` remotely (key-based ssh, alias from ~/.ssh/config).
+[[hosts]]
+name = "local"
+kind = "local"
+
+# [[hosts]]
+# name = "build-server"
+# kind = "ssh"
+# target = "build-server"          # ssh alias
+# path_prefix = 'export PATH="$HOME/.local/bin:$PATH"'
+
+# Optional: fixed monthly subscriptions (USD), shown separately from
+# pay-as-you-go consumption.
+# [[subscriptions]]
+# name = "My plan"
+# provider = "anthropic"
+# monthly_usd = 20.0

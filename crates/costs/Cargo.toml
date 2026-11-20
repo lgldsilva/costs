@@ -1,0 +1,18 @@
+[package]
+name = "costs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+clap = { version = "4", features = ["derive"] }
+costs-core = { path = "../costs-core" }
+serde_json = "1.0.154"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

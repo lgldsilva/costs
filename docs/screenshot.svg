@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="671" height="304" viewBox="0 0 671 304" font-family="Menlo,DejaVu Sans Mono,monospace" font-size="13">
+<rect width="100%" height="100%" fill="#0c0c0c"/>
+<text x="16" y="29" fill="#569cd6">≈ US$ 24 &#183; 2026-11</text>
+<text x="16" y="46" fill="#4ec9b0">---</text>
+<text x="16" y="63" fill="#d4d4d4">API estimada &#183; US$ 24.31 &#183; 2026-11 | color=#202124,#F2F2F7</text>
+<text x="16" y="80" fill="#4ec9b0">--Estimativa a preço de API; não é pagamento. | color=#202124,#F2F2F7</text>
+<text x="16" y="97" fill="#4ec9b0">--Assinaturas e recargas não incluídas. | color=#202124,#F2F2F7</text>
+<text x="16" y="114" fill="#d4d4d4"></text>
+<text x="16" y="131" fill="#569cd6">$ costs report --by provider</text>
+<text x="16" y="148" fill="#d4d4d4">provider                     consumo USD*  sem custo          input       output</text>
+<text x="16" y="165" fill="#4ec9b0">------------------------------------------------------------------------</text>
+<text x="16" y="182" fill="#d4d4d4">anthropic                          11.42          0     412,044,488    4,138,023</text>
+<text x="16" y="199" fill="#d4d4d4">openai                               6.87          0     106,644,488    2,138,023</text>
+<text x="16" y="216" fill="#d4d4d4">zhipu                                3.19         13      46,644,488      938,023</text>
+<text x="16" y="233" fill="#d4d4d4">moonshot                             1.65          0         206,073       11,068</text>
+<text x="16" y="250" fill="#d4d4d4">deepseek                             1.24          0       9,280,971       618,247</text>
+<text x="16" y="267" fill="#4ec9b0">------------------------------------------------------------------------</text>
+<text x="16" y="284" fill="#d4d4d4">* consumo estimado a preço de API &#183; `costs breakdown` detalha componentes</text>
+</svg>
