@@ -451,7 +451,9 @@ mod tests {
             200,
             r#"{"data":{"privateCipher":"AAECAwQFBgcICQoLs5uiEmjdPcKqD8QXw7NUr5fv9pJGLAzxIdruHIvo3y3Rm5zaX5FiHw83+YcRl/bW7wuVRcDK2op6VIkwVcYg7zEjT3Lyw3Hj53wj1adaCBY="}}"#,
         );
+        let cache = ctx.cache_dir();
         let c = super::super::creds::Ctx {
+            cache_dir: cache.as_path(),
             http: &http,
             env: &ctx,
             now: ctx.now,

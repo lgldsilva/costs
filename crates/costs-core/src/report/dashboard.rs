@@ -56,6 +56,20 @@ fn script_json(value: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{TimeZone, Utc};
+
+    fn payload_of(con: &Connection, config: &crate::config::Config) -> Value {
+        let document = html(con, "2024-01", &Filters::default(), config).unwrap();
+        let payload = document
+            .split("const data=")
+            .nth(1)
+            .unwrap()
+            .split(";\n")
+            .next()
+            .unwrap();
+        serde_json::from_str(payload).unwrap()
+    }
+
     #[test]
     fn hostile_names_cannot_close_script() {
         let value = json!({"model":"</script><img src=x onerror=alert(1)>&\u{2028}"});
@@ -65,7 +79,6 @@ mod tests {
     }
     #[test]
     fn freshness_keeps_last_success_and_every_expected_agent() {
-        use chrono::{TimeZone, Utc};
         let directory = tempfile::tempdir().unwrap();
         let success = Utc.with_ymd_and_hms(2024, 1, 15, 8, 0, 0).unwrap();
         let attempt = Utc.with_ymd_and_hms(2024, 1, 15, 12, 0, 0).unwrap();
@@ -75,15 +88,7 @@ mod tests {
             .log_run(attempt, "mac", "codex", "error", Some("offline"), 0)
             .unwrap();
         let config = crate::config::parse_config("agents = ['codex', 'claude']\n[[hosts]]\nname = 'mac'\n").unwrap();
-        let document = html(store.connection(), "2024-01", &Filters::default(), &config).unwrap();
-        let payload = document
-            .split("const data=")
-            .nth(1)
-            .unwrap()
-            .split(";\n")
-            .next()
-            .unwrap();
-        let payload: Value = serde_json::from_str(payload).unwrap();
+        let payload = payload_of(store.connection(), &config);
         assert_eq!(payload["runs"][0]["status"], "error");
         assert!(
             payload["runs"][0]["lastSuccess"]
@@ -99,6 +104,38 @@ mod tests {
         );
         assert_eq!(payload["expected"].as_array().unwrap().len(), 2);
         assert!(chrono::DateTime::parse_from_rfc3339(payload["generatedAt"].as_str().unwrap()).is_ok());
+    }
+
+    #[test]
+    fn plan_providers_use_the_cost_map_and_flag_inconclusive_plans() {
+        let config = crate::config::parse_config(
+            "[[subscriptions]]\nname = \"Codex\"\nprovider = \"codex\"\nmonthly_usd = 20\n\
+             [[subscriptions]]\nname = \"OpenCode Go\"\nprovider = \"opencode-go\"\nmonthly_usd = 10\n\
+             [[subscriptions]]\nname = \"z.ai\"\nprovider = \"zai\"\nmonthly_usd = 42\n\
+             [[subscriptions]]\nname = \"xAI\"\nprovider = \"xai\"\nmonthly_usd = 30\n\
+             [[hosts]]\nname = \"mac\"\n\
+             [quota.cost_map]\ncodex = \"openai\"\nzai = \"zhipu\"\nxai = [\"xai\", \"cursor\"]\n",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let store = crate::store::Store::open(&directory.path().join("t.sqlite"), "", chrono::Utc::now()).unwrap();
+        let payload = payload_of(store.connection(), &config);
+        let plans = payload["plans"].as_array().unwrap();
+        assert_eq!(plans.len(), 4);
+        let by_name = |name: &str| {
+            plans
+                .iter()
+                .find(|p| p["name"] == name)
+                .unwrap_or_else(|| panic!("missing plan {name}"))
+        };
+        assert_eq!(by_name("Codex")["providers"], json!(["openai"]));
+        assert_eq!(by_name("Codex")["inconclusive"], false);
+        assert_eq!(by_name("z.ai")["providers"], json!(["zhipu"]));
+        assert_eq!(by_name("xAI")["providers"], json!(["xai", "cursor"]));
+        // OpenCode Go sem atribuição confiável é inconclusivo, mas o id de quota
+        // ainda vai em `providers` para o painel comparar com o uso do provedor.
+        assert_eq!(by_name("OpenCode Go")["inconclusive"], true);
+        assert_eq!(by_name("OpenCode Go")["providers"], json!(["opencode-go"]));
     }
 
     proptest::proptest! {

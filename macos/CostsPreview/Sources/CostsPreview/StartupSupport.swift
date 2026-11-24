@@ -22,8 +22,23 @@ struct StartupPaths: Equatable {
     }
 
     func isTemporaryApp(_ appURL: URL) -> Bool {
-        let canonicalApp = appURL.standardizedFileURL.resolvingSymlinksInPath()
-        return canonicalApp.path == temporaryDirectory.path || canonicalApp.path.hasPrefix(temporaryDirectory.path + "/")
+        let appVariants = Self.pathVariants(of: appURL.standardizedFileURL.resolvingSymlinksInPath().path)
+        return Self.pathVariants(of: temporaryDirectory.path).contains { base in
+            appVariants.contains { $0 == base || $0.hasPrefix(base + "/") }
+        }
+    }
+
+    /// `/private` pode estar presente ou colapsado após a canonicalização, dependendo da
+    /// versão do Foundation (o novo Foundation do macOS 27 colapsa `/private/tmp` para
+    /// `/tmp` e não re-expande), então comparamos cada caminho nas duas formas.
+    private static func pathVariants(of path: String) -> Set<String> {
+        var variants: Set<String> = [path]
+        if path == "/private" || path.hasPrefix("/private/") {
+            variants.insert(String(path.dropFirst("/private".count)))
+        } else {
+            variants.insert("/private" + path)
+        }
+        return variants
     }
 }
 

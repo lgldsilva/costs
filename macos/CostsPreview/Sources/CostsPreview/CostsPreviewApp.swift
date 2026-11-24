@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let loginService: LoginServiceControlling
     private var launchServiceError: String?
     private var launchServiceMessage: String?
+    private var quotaTimer: Timer?
 
     override init() {
         let args = Array(CommandLine.arguments.dropFirst())
@@ -36,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let appearance, ["light", "dark"].contains(appearance) {
             setenv("COSTS_PREVIEW_APPEARANCE", appearance, 1)
         }
+        ConsolidatedEnv.load()
         autoOpen = wantsAutoOpen
         model = PreviewModel(loader: StatusLoader(snapshotURL: snapshotURL), isFixture: snapshotURL != nil, initialProviderID: initialProviderID)
         loginService = MainAppLoginService()
@@ -71,6 +73,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentViewController?.view.setAccessibilityIdentifier("costs-preview-popover")
         model.onSummaryChange = { [weak self] in self?.updateStatusTitle() }
         updateStatusTitle()
+        quotaTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.refreshQuotaIfDue() }
+        }
         if autoOpen {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in self?.showPopover() }
         }
@@ -355,10 +360,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         NSApp.activate(ignoringOtherApps: true)
-        if !model.isFixture,
-           lastAutoQuotaRefresh.map({ Date().timeIntervalSince($0) > 300 }) ?? true {
-            lastAutoQuotaRefresh = Date()
-            model.refresh(quota: .ifStale)
-        }
+        refreshQuotaIfDue()
+    }
+
+    /// Ciclo de 5 min (timer de fundo e abertura do painel): só vai à rede para o que
+    /// passou do TTL; falhas preservam o último dado bom no cache.
+    private func refreshQuotaIfDue() {
+        guard !model.isFixture,
+              lastAutoQuotaRefresh.map({ Date().timeIntervalSince($0) > 300 }) ?? true else { return }
+        lastAutoQuotaRefresh = Date()
+        model.refresh(quota: .ifStale)
     }
 }

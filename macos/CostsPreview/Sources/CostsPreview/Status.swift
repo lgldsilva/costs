@@ -209,6 +209,7 @@ enum ProviderCatalog {
         Entry(id: "opencode-go", name: "OpenCode Go", monogram: "OC", color: RGBColor(red: 0.43, green: 0.34, blue: 0.81)),
         Entry(id: "deepseek", name: "DeepSeek", monogram: "DS", color: RGBColor(red: 0.30, green: 0.42, blue: 1.00)),
         Entry(id: "openrouter", name: "OpenRouter", monogram: "OR", color: RGBColor(red: 0.40, green: 0.45, blue: 0.55)),
+        Entry(id: "antigravity", name: "Antigravity", monogram: "AG", color: RGBColor(red: 0.48, green: 0.38, blue: 1.00)),
     ]
     static func name(for id: String) -> String { names.first { $0.id == id }?.name ?? id }
     static func monogram(for id: String) -> String { names.first { $0.id == id }?.monogram ?? "?" }

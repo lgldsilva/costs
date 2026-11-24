@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
+use std::path::Path;
+
 use super::env::{Env, HttpClient};
 
 const DEFAULT_TIMEOUT_S: u64 = 5;
@@ -54,6 +56,8 @@ pub struct Ctx<'a> {
     pub now: i64,
     /// Roda o enriquecimento de créditos de reset do z.ai (limitado por `quota::fetch`).
     pub enrich_resets: bool,
+    /// Cache de quota (`default_cache_dir` do chamador), para checkers locais.
+    pub cache_dir: &'a Path,
 }
 
 impl Ctx<'_> {
@@ -190,11 +194,13 @@ mod tests {
             t.write_home(".pi/agent/auth.json", &serde_json::json!({"test": {"key": pi_key}}).to_string());
             t.write_home(".local/share/opencode/auth.json", &serde_json::json!({"test": {"key": oc_key}}).to_string());
             let http = FakeHttp::new();
+            let cache = t.cache_dir();
             let ctx = Ctx {
                 http: &http,
                 env: &t,
                 now: t.now,
                 enrich_resets: false,
+                cache_dir: cache.as_path(),
             };
             let mut expected = vec![env_key.clone(), pi_key.clone(), oc_key.clone()];
             if harness != 0 {

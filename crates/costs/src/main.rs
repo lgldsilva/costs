@@ -4,6 +4,7 @@ mod menubar;
 mod quota_cmd;
 mod service_cmd;
 mod status;
+mod subs;
 mod util;
 
 use std::io;

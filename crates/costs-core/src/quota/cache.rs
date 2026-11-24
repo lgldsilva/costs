@@ -12,7 +12,7 @@ const LOCK_FRESH_S: i64 = 60;
 const SCHEMA_VERSION: u32 = 1;
 const SOURCE_ACTIVE: &str = "active";
 
-/// `$AI_USAGE_CACHE_DIR`, senão `$XDG_CACHE_HOME/ai-standards/usage`, senão o cache do SO.
+/// `$AI_USAGE_CACHE_DIR`, senão `$XDG_CACHE_HOME/ai-standards/usage`, senão `~/.cache`.
 pub fn default_cache_dir(env: &dyn Env) -> PathBuf {
     if let Some(d) = env.var("AI_USAGE_CACHE_DIR") {
         return PathBuf::from(d);
@@ -24,12 +24,10 @@ pub fn default_cache_dir(env: &dyn Env) -> PathBuf {
     base.join("ai-standards").join("usage")
 }
 
+/// Convenção XDG (`~/.cache`), igual aos scripts bash do ai-standards: o cache é
+/// compartilhado com o statusline e o `~/Library/Caches` do macOS dividia o diretório
+/// em dois conforme o contexto (launchd/GUI sem `XDG_CACHE_HOME` vs shell com).
 fn os_cache_dir(env: &dyn Env) -> PathBuf {
-    if cfg!(any(windows, target_os = "macos"))
-        && let Some(d) = directories::BaseDirs::new()
-    {
-        return d.cache_dir().to_path_buf();
-    }
     env.home().unwrap_or_default().join(".cache")
 }
 

@@ -168,12 +168,13 @@ pub fn snapshot(ctx: &StatusCtx<'_>) -> Result<Value, Box<dyn Error>> {
     };
     let oldest = ctx.store.oldest_ok_sync(&sync_pairs(ctx.cfg))?;
     let (age, stale) = sync_age(oldest.as_deref(), ctx.now);
-    let sub_by_provider: HashMap<&str, f64> = ctx
-        .cfg
-        .subscriptions
-        .iter()
-        .filter_map(|s| Some((s.provider.as_deref()?, s.monthly_usd)))
-        .collect();
+    let resolve_sub = |provider: &str| {
+        crate::subs::resolve(
+            provider,
+            crate::subs::entry_for(provider, &ctx.cfg.quota.providers, ctx.entries),
+            &ctx.cfg.subscriptions,
+        )
+    };
     let mut providers = Vec::new();
     for (provider, entry) in ctx.cfg.quota.providers.iter().zip(ctx.entries) {
         let keys: Vec<&str> = ctx
@@ -212,7 +213,9 @@ pub fn snapshot(ctx: &StatusCtx<'_>) -> Result<Value, Box<dyn Error>> {
             "plan": entry.get("plan").and_then(Value::as_str)
                 .map(str::trim).filter(|plan| !plan.is_empty()),
             "cost_usd": cost,
-            "subscription_usd_month": sub_by_provider.get(provider.as_str()).copied(),
+            "subscription_usd_month": resolve_sub(provider).and_then(|s| s.usd_month),
+            "subscription_state": resolve_sub(provider).map(|s| s.state.as_str()),
+            "subscription_source": resolve_sub(provider).and_then(|s| s.source()),
             "balance": balance.map(fmt_balance),
             "ok": entry.get("ok").and_then(Value::as_bool).unwrap_or(false),
             "error": error,
@@ -266,6 +269,26 @@ pub fn snapshot(ctx: &StatusCtx<'_>) -> Result<Value, Box<dyn Error>> {
         .filter(|(_, k)| k.0 <= 3)
         .map(|(i, _)| ctx.cfg.quota.providers[*i].as_str())
         .collect();
+    let mapped: Vec<&str> = ctx.cfg.quota.cost_map.values().flatten().map(String::as_str).collect();
+    let other_providers = ctx.store.other_provider_spend(&mapped, ctx.month)?;
+    let free_models = ctx.store.free_usage(ctx.month)?;
+    let free_tokens: i64 = free_models.iter().map(|(_, t)| *t).sum();
+    let mut subscriptions_total = 0.0;
+    for provider in &ctx.cfg.quota.providers {
+        if let Some(s) = resolve_sub(provider) {
+            subscriptions_total += s.counted_monthly();
+        }
+    }
+    // Assinaturas sem provedor de quota (ou sem provedor) continuam valendo.
+    for s in &ctx.cfg.subscriptions {
+        let unmatched = s
+            .provider
+            .as_deref()
+            .is_none_or(|p| !ctx.cfg.quota.providers.iter().any(|q| q == p));
+        if unmatched {
+            subscriptions_total += s.monthly_usd;
+        }
+    }
     Ok(json!({
         "month": ctx.month,
         "spend_usd": spend,
@@ -273,9 +296,23 @@ pub fn snapshot(ctx: &StatusCtx<'_>) -> Result<Value, Box<dyn Error>> {
         "prev_month_usd": prev_spend,
         "sync_age": age,
         "stale": stale,
-        "subscriptions_usd_month": ctx.cfg.subscriptions.iter().map(|s| s.monthly_usd).sum::<f64>(),
+        "subscriptions_usd_month": subscriptions_total,
         "providers": providers,
         "use_order": use_order,
+        "free_usage": (free_tokens > 0).then(|| {
+            json!({
+                "tokens": free_tokens,
+                "models": free_models.iter().take(5).map(|(m, t)| json!({
+                    "model": m,
+                    "tokens": t,
+                })).collect::<Vec<_>>(),
+            })
+        }),
+        "other_providers": other_providers.iter().map(|(p, usd, tok)| json!({
+            "provider": p,
+            "usd": usd,
+            "tokens": tok,
+        })).collect::<Vec<_>>(),
     }))
 }
 
@@ -347,6 +384,169 @@ monthly_usd = 10.0
         assert_eq!(providers[1]["id"], "zai");
         assert_eq!(providers[1]["subscription_usd_month"], 10.0);
         assert!(v["use_order"].as_array().unwrap().is_empty());
+    }
+
+    fn snapshot_with_cfg(cfg: &str, entries: Vec<Value>) -> Value {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("s.sqlite"), "", utc_now()).unwrap();
+        let cfg = parse_config(cfg).unwrap();
+        let ctx = StatusCtx {
+            store: &store,
+            cfg: &cfg,
+            entries: &entries,
+            now: 1000.0,
+            month: "2026-10",
+        };
+        snapshot(&ctx).unwrap()
+    }
+
+    fn provider_by_id<'a>(v: &'a Value, id: &str) -> &'a Value {
+        v["providers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["id"] == id)
+            .unwrap()
+    }
+
+    #[test]
+    fn free_plan_refutes_subscription_in_total() {
+        let v = snapshot_with(vec![json!({}), json!({"plan": "free"})]);
+        let zai = provider_by_id(&v, "zai");
+        assert_eq!(zai["subscription_usd_month"], Value::Null);
+        assert_eq!(zai["subscription_state"], "free");
+        assert_eq!(v["subscriptions_usd_month"], 0.0);
+    }
+
+    #[test]
+    fn detected_paid_plan_confirms_subscription() {
+        let v = snapshot_with(vec![json!({}), json!({"plan": "pro"})]);
+        let zai = provider_by_id(&v, "zai");
+        assert_eq!(zai["subscription_usd_month"], 10.0);
+        assert_eq!(zai["subscription_state"], "active");
+        assert_eq!(zai["subscription_source"], "config");
+        assert_eq!(v["subscriptions_usd_month"], 10.0);
+    }
+
+    #[test]
+    fn paid_plan_without_config_is_discovered_with_public_price() {
+        let cfg = r#"
+[quota]
+providers = ["codex", "claude"]
+[[hosts]]
+name = "mac"
+"#;
+        let v = snapshot_with_cfg(cfg, vec![json!({"plan": "plus"}), json!({"ok": true})]);
+        let codex = provider_by_id(&v, "codex");
+        assert_eq!(codex["subscription_state"], "active");
+        assert_eq!(codex["subscription_source"], "detected");
+        assert_eq!(codex["subscription_usd_month"], 20.0);
+        // Claude autenticado sem assinatura no config: ativo, sem preço conhecido.
+        let claude = provider_by_id(&v, "claude");
+        assert_eq!(claude["subscription_state"], "active");
+        assert_eq!(claude["subscription_source"], "detected");
+        assert_eq!(claude["subscription_usd_month"], Value::Null);
+        assert_eq!(v["subscriptions_usd_month"], 20.0);
+    }
+
+    #[test]
+    fn plan_change_updates_price_from_public_table() {
+        let cfg = r#"
+[quota]
+providers = ["claude"]
+[[hosts]]
+name = "mac"
+[[subscriptions]]
+name = "Claude"
+provider = "claude"
+monthly_usd = 20.0
+"#;
+        // Troca de Pro para Max 5x: o preço público detectado substitui o config velho.
+        let v = snapshot_with_cfg(cfg, vec![json!({"plan": "Max 5x", "ok": true})]);
+        let claude = provider_by_id(&v, "claude");
+        assert_eq!(claude["subscription_state"], "active");
+        assert_eq!(claude["subscription_source"], "detected");
+        assert_eq!(claude["subscription_usd_month"], 100.0);
+        assert_eq!(v["subscriptions_usd_month"], 100.0);
+    }
+
+    #[test]
+    fn free_usage_and_other_providers_land_in_the_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("s.sqlite"), "", utc_now()).unwrap();
+        let mut rows = vec![
+            costs_core::model::Row {
+                host: "mac".into(),
+                agent: "opencode".into(),
+                date: "2026-10-01".into(),
+                model: "deepseek-v4.1-flash".into(),
+                model_raw: "deepseek-v4.1-flash-free".into(),
+                provider: "deepseek".into(),
+                input: 2_000_000,
+                output: 1_000_000,
+                cache_read: 0,
+                cache_write: 0,
+                cost_usd: None,
+                cost_basis: "free".into(),
+            },
+            costs_core::model::Row {
+                host: "mac".into(),
+                agent: "opencode".into(),
+                date: "2026-10-02".into(),
+                model: "kimi-k3".into(),
+                model_raw: "kimi-k3".into(),
+                provider: "moonshot".into(),
+                input: 100_000,
+                output: 200_000,
+                cache_read: 0,
+                cache_write: 0,
+                cost_usd: Some(4.0),
+                cost_basis: "reported".into(),
+            },
+        ];
+        store.upsert_rows(&rows, "2026-10-02T00:00:00+00:00").unwrap();
+        rows.clear();
+        let _ = rows;
+        let cfg = parse_config(CFG).unwrap();
+        let entries = [json!({}), json!({})];
+        let ctx = StatusCtx {
+            store: &store,
+            cfg: &cfg,
+            entries: &entries,
+            now: 1000.0,
+            month: "2026-10",
+        };
+        let v = snapshot(&ctx).unwrap();
+        let free = v["free_usage"].as_object().unwrap();
+        assert_eq!(free["tokens"], 3_000_000);
+        assert_eq!(free["models"][0]["model"], "deepseek-v4.1-flash");
+        let others = v["other_providers"].as_array().unwrap();
+        assert_eq!(others.len(), 1);
+        assert_eq!(others[0]["provider"], "moonshot");
+        assert_eq!(others[0]["usd"], 4.0);
+    }
+
+    #[test]
+    fn free_plan_without_config_is_silent() {
+        let cfg = r#"
+[quota]
+providers = ["codex"]
+[[hosts]]
+name = "mac"
+"#;
+        let v = snapshot_with_cfg(cfg, vec![json!({"plan": "free"})]);
+        assert_eq!(provider_by_id(&v, "codex")["subscription_state"], "free");
+        assert_eq!(v["subscriptions_usd_month"], 0.0);
+    }
+
+    #[test]
+    fn missing_plan_keeps_subscription_unverified_and_counted() {
+        let v = snapshot_with(vec![json!({}), json!({})]);
+        let zai = provider_by_id(&v, "zai");
+        assert_eq!(zai["subscription_usd_month"], 10.0);
+        assert_eq!(zai["subscription_state"], "unverified");
+        assert_eq!(v["subscriptions_usd_month"], 10.0);
+        assert_eq!(provider_by_id(&v, "deepseek")["subscription_state"], Value::Null);
     }
 
     #[test]

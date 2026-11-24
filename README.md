@@ -211,6 +211,15 @@ lua5.4 noctalia/costs/tests/sync_test.lua
 bash menubar/tests/refresh_test.sh
 ```
 
+Real-export browser smoke (optional, needs Playwright): generates the dashboard with
+the actual CLI binary from a store snapshot and exercises it in Chromium (filters,
+drilldown, peaks, plans, freshness, 1200/390 viewports, no external resources):
+
+```bash
+NODE_PATH=<playwright installation> node tests/real-dashboard-smoke.cjs \
+  --bin target/debug/costs --db <store.sqlite> --config <config.toml> [--month 2026-11] [--provider zai]
+```
+
 Layout: `crates/costs-core` (collection, store, reports, quota, backup), `crates/costs` (CLI), `crates/costs-tray` (tray), `menubar/` (SwiftBar + launchd), `noctalia/costs` (Linux desktop widget), `macos/CostsPreview` (native macOS menu bar app).
 
 ## License

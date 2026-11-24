@@ -105,11 +105,30 @@ mod tests {
             resolve(None, None, None, None, Some("2024-01-01"), today),
             Err("--from and --to are required together".into())
         );
+        // Datas não canônicas são rejeitadas mesmo quando `%Y-%m-%d` aceita ("%m" aceita 1 dígito).
+        assert_eq!(parse("2024-1-03").map(|_| ()), Err("invalid date: 2024-1-03".into()));
+        assert_eq!(parse("banana").map(|_| ()), Err("invalid date: banana".into()));
     }
 
     #[test]
     fn boundaries() {
         let today = parse("2024-01-01").unwrap();
+        assert_eq!(
+            resolve(None, None, Some("last-30-days"), None, None, today)
+                .unwrap()
+                .unwrap(),
+            ("2023-12-03".into(), "2024-01-01".into())
+        );
+        assert_eq!(
+            resolve(None, None, Some("this-week"), None, None, today)
+                .unwrap()
+                .unwrap(),
+            ("2024-01-01".into(), "2024-01-01".into())
+        );
+        assert_eq!(
+            resolve(None, Some(3), None, None, None, today).unwrap().unwrap(),
+            ("2023-12-30".into(), "2024-01-01".into())
+        );
         assert_eq!(
             resolve(None, None, Some("last-week"), None, None, today)
                 .unwrap()
@@ -122,6 +141,14 @@ mod tests {
                 .unwrap()
                 .1,
             "2024-02-29"
+        );
+        // Dezembro rola para o ano seguinte.
+        assert_eq!(
+            resolve(Some("2024-12"), None, None, None, None, today)
+                .unwrap()
+                .unwrap()
+                .1,
+            "2024-12-31"
         );
         assert!(resolve(None, None, None, Some("2024-03-01"), Some("2024-02-29"), today).is_err());
         assert!(resolve(Some("2024-01"), Some(30), None, None, None, today).is_err());

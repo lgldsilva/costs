@@ -3,6 +3,9 @@
 # Ambiente do launchd/SwiftBar: PATH minimo para o costs e o que ele chama (ssh, grok).
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:${PATH:-}"
 
+# Chaves de API consolidadas (evita fallback para outras fontes de credencial)
+[ -r "$HOME/.config/agentic-api-keys.env" ] && . "$HOME/.config/agentic-api-keys.env"
+
 # Binario: $COSTS_BIN, senao ~/.local/bin/costs, senao target/release/costs do repo.
 costs_bin() {
   if [ -n "${COSTS_BIN:-}" ]; then

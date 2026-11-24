@@ -11,7 +11,12 @@ static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 pub fn default_report_path() -> io::Result<PathBuf> {
     let project = directories::ProjectDirs::from("com", "lgldsilva", "costs")
         .ok_or_else(|| io::Error::other("cannot resolve per-user report directory"))?;
-    let directory = project.data_local_dir().join("reports");
+    report_path_under(project.data_local_dir())
+}
+
+/// Shared resolution so tests can pin the base directory instead of the process environment.
+fn report_path_under(data_local: &Path) -> io::Result<PathBuf> {
+    let directory = data_local.join("reports");
     ensure_private_directory(&directory)?;
     Ok(directory.join("dashboard.html"))
 }
@@ -136,5 +141,68 @@ mod tests {
         let link = root.path().join("linked");
         std::os::unix::fs::symlink(&directory, &link).unwrap();
         assert!(ensure_private_directory(&link).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn recreates_pruned_report_directory_as_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("reports");
+        ensure_private_directory(&directory).unwrap();
+        std::fs::remove_dir(&directory).unwrap();
+        ensure_private_directory(&directory).unwrap();
+        assert_eq!(
+            std::fs::metadata(&directory).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        // A file where the directory belongs is rejected, not overwritten.
+        std::fs::remove_dir(&directory).unwrap();
+        std::fs::write(&directory, "not a directory").unwrap();
+        assert!(ensure_private_directory(&directory).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn default_report_path_is_private_per_user() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let path = report_path_under(&root.path().join("data-local")).unwrap();
+        let reports = root.path().join("data-local").join("reports");
+        assert_eq!(path, reports.join("dashboard.html"));
+        let metadata = std::fs::metadata(&reports).unwrap();
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o700);
+    }
+
+    #[test]
+    fn refuses_directory_destination() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(write_report(dir.path(), b"new").is_err());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn destination_permission_and_lookup_errors_propagate() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        // A pre-existing reports directory with group/other bits fails the privacy check.
+        let loose = dir.path().join("reports");
+        std::fs::create_dir(&loose).unwrap();
+        let _ = std::fs::set_permissions(&loose, std::fs::Permissions::from_mode(0o755));
+        assert!(report_path_under(dir.path()).is_err());
+        let _ = std::fs::set_permissions(&loose, std::fs::Permissions::from_mode(0o700));
+        // Lookup failures under a plain file propagate instead of creating anything.
+        let file = dir.path().join("plain");
+        std::fs::write(&file, "keep").unwrap();
+        assert!(write_report(&file.join("impossible"), b"new").is_err());
+        assert!(ensure_private_directory(&file.join("reports")).is_err());
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "keep");
+        // An explicit destination under a nonexistent tree still requires its parent.
+        assert!(write_report(&dir.path().join("deep").join("nested").join("report.html"), b"new").is_err());
+        assert!(!dir.path().join("deep").exists());
+        // No failed attempt leaves temporary siblings behind.
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+        assert_eq!(std::fs::read_dir(&loose).unwrap().count(), 0);
     }
 }

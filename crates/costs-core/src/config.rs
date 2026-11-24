@@ -85,6 +85,8 @@ impl Host {
 pub struct Subscription {
     pub name: String,
     pub provider: Option<String>,
+    /// Restringe a assinatura a um rótulo de plano detectado (ex.: `max 5x`).
+    pub plan: Option<String>,
     pub monthly_usd: f64,
 }
 
@@ -162,6 +164,7 @@ struct RawSub {
     name: String,
     provider: Option<String>,
     monthly_usd: Number,
+    plan: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -339,6 +342,7 @@ pub fn parse_config(text: &str) -> Result<Config, ConfigError> {
             name: s.name,
             provider: s.provider,
             monthly_usd: s.monthly_usd.get(),
+            plan: s.plan.clone(),
         })
         .collect();
     Ok(Config {
@@ -543,6 +547,7 @@ mod tests {
         assert_eq!(
             cfg.subscriptions,
             [Subscription {
+                plan: None,
                 name: "OpenCode Go".into(),
                 provider: None,
                 monthly_usd: 10.0

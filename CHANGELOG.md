@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- CostsPreview como item de barra nativo: refresh automático das cotas a cada 5 min
+  (o título da barra fica fresco sem abrir o painel; antes só atualizava ao abrir o
+  popover) e o app carrega `~/.config/agentic-api-keys.env` no ambiente dos `costs`
+  que ele executa — o mesmo contrato que o `costs-env.sh` dava ao SwiftBar/launchd.
+- Cobertura dos caminhos de datas e exportação do relatório: presets de calendário
+  (`--period`, `--last-days`) e ambiguidade agora têm regressão no CLI; destino
+  privado do dashboard (`default_report_path`) e recriação do diretório de reports
+  com permissão 0700 têm teste; falha de escrita não deixa arquivo temporário;
+  payload de planos valida `quota.cost_map` (string ou lista) e badges de
+  confiança (OpenCode Go inconclusivo).
+- Browser smoke sobre exportação real (`tests/real-dashboard-smoke.cjs`): gera o
+  dashboard com o binário de verdade a partir de um snapshot do store e valida no
+  Chromium filtros combináveis, drilldown diário, picos, planos, frescor e
+  viewports 1200/390, garantindo documento offline sem recursos externos.
+  Mantido fora do CI; requer instalação própria do Playwright via `NODE_PATH`.
 - `costs quota --if-stale`: só vai à rede para o que passou do TTL do cache. Timer e
   abertura do painel do Noctalia, ciclo de 5 min do SwiftBar e abertura do app macOS
   usam `--if-stale`; só os botões de atualizar forçam `--refresh` (antes cada um disso
@@ -27,6 +42,42 @@
   preço do arquivo anterior em vez de virar NULL por um dia; preço `NaN`/`inf` é
   descartado (antes gerava um arquivo ilegível que travava todo sync); o sync regenera
   um `prices.json` ilegível e mostra os avisos da atualização.
+- claude (quota): o token é procurado no `~/.claude/.credentials.json` **e** no item
+  "Claude Code-credentials" do Keychain, e vale o que estiver válido — o access token do
+  arquivo expira em ~8h e um `/login` pode renovar só o Keychain, o que deixava a quota
+  presa em "login expirado" mesmo com login feito.
+- visibilidade: provedores de custo fora do `cost_map` (ex.: Moonshot via OpenCode,
+  Meta, Google, Alibaba) ganham a seção "Outros provedores" no menu e o campo
+  `other_providers` do status, com custo e tokens de cada um. Uso gratuito
+  (`cost_basis='free'`, ex.: modelos `:free`/`-free` do OpenCode) entra como "Bônus
+  free · N M tokens sem custo" com os modelos por volume, e no campo `free_usage`
+  do status — antes esse consumo só aparecia somado no total.
+- antigravity: novo provedor de quota `antigravity` que lê o payload gravado pelo
+  statusline do ai-standards no cache compartilhado (`antigravity-payload.json`,
+  sem rede e sem email). Os buckets vêm por família de modelo — `gemini-*` para
+  Gemini e `3p-*` para Claude/GPT de terceiros — e as duas quotas aparecem com o
+  prefixo da família (`gem sem`, `3p sem`); o `plan_tier` do payload vai para
+  `plan`. A cota local nasce no terminal onde o Antigravity roda e o costs a
+  publica no SwiftBar/Noctalia.
+- claude (quota): o plano contratado agora é detectado no `/api/oauth/profile`
+  (`rate_limit_tier`: Pro, Max 5x, Max 20x) e vai para o `plan` do entry — best
+  effort, falha do profile não derruba as janelas de uso.
+- assinaturas: o plano contratado agora é descoberto dinamicamente pela quota. O
+  rótulo detectado e o estado da credencial decidem a assinatura de cada provedor:
+  plano pago detectado ou credencial válida em provedor só-assinatura (OpenCode Go)
+  = ativa; plano gratuito = refutada; **provedor só-assinatura com credencial
+  recusada (401/403) = `lapsed`** (não renovada, sai do total); sem rótulo e com
+  login expirado = mantém o valor do config. O preço vem do `[[subscriptions]]`
+  com filtro de plano (`plan = "max 5x"`, override específico), senão da tabela de
+  preços públicos (Codex plus US$20/pro US$200; Claude Pro US$20/Max 5x
+  US$100/Max 20x US$200; SuperGrok US$30; OpenCode Go US$10), senão do config
+  default — então uma troca de plano (ex.: Claude Pro → Max 5x) atualiza o valor
+  sozinha em vez de propagar o preço velho; rótulo pago fora da tabela em provedor
+  tabelado (ex.: Codex `go`) fica "ativo (preço n/d)" em vez de arrastar o default
+  do config. Planos pagos sem entrada no config aparecem sozinhos. O status ganha `subscription_state`
+  (`active`/`free`/`lapsed`/`unverified`) e `subscription_source`
+  (`config`/`detected`); o SwiftBar lista descobertas como "plano X detectado",
+  não renovadas como "assinatura inativa" e mostra o plano no título do provedor.
 - opencode: o coletor lê só os últimos 60 dias (`COSTS_OPENCODE_LOOKBACK_DAYS`, `0` = tudo)
   pelo `time_created` indexado, e só os campos de uso (`json_extract` no sqlite) em vez do
   JSON inteiro de cada mensagem. On an HDD-backed home directory (667 MB sample) a full scan
