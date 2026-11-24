@@ -551,6 +551,52 @@ impl Store {
         let total = rows.iter().fold(0.0, |acc, r| acc + r.1); // sum() de vazio daria -0.0
         Ok((total, rows))
     }
+
+    /// Uso gratuito do mês (`cost_basis='free'`): tokens por modelo canônico,
+    /// do maior volume para o menor. É o "bônus": consumo registrado sem custo.
+    pub fn free_usage(&self, month: &str) -> Result<Vec<(String, i64)>, StoreError> {
+        let mut stmt = self.con.prepare(
+            "SELECT model, COALESCE(SUM(input + output + cache_read + cache_write), 0) FROM usage \
+             WHERE cost_basis = 'free' AND date LIKE ? \
+             GROUP BY model ORDER BY 2 DESC, 1",
+        )?;
+        let rows = stmt
+            .query_map([format!("{month}%")], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows.into_iter().filter(|(_, t)| *t > 0).collect())
+    }
+
+    /// Provedores com uso no mês fora da lista dada (fora do `cost_map`):
+    /// `(provider, US$, tokens)` do maior custo para o menor. Sem lista, todos.
+    pub fn other_provider_spend(&self, providers: &[&str], month: &str) -> Result<Vec<(String, f64, i64)>, StoreError> {
+        let like = format!("{month}%");
+        let mut stmt = if providers.is_empty() {
+            self.con.prepare(
+                "SELECT provider, COALESCE(SUM(cost_usd), 0), \
+                 COALESCE(SUM(input + output + cache_read + cache_write), 0) FROM usage \
+                 WHERE date LIKE ? GROUP BY provider ORDER BY 2 DESC, 3 DESC, 1",
+            )?
+        } else {
+            let marks = vec!["?"; providers.len()].join(",");
+            let sql = format!(
+                "SELECT provider, COALESCE(SUM(cost_usd), 0), \
+                 COALESCE(SUM(input + output + cache_read + cache_write), 0) FROM usage \
+                 WHERE provider NOT IN ({marks}) AND date LIKE ? \
+                 GROUP BY provider ORDER BY 2 DESC, 3 DESC, 1"
+            );
+            self.con.prepare(&sql)?
+        };
+        let args = providers.iter().copied().chain(std::iter::once(like.as_str()));
+        let rows = stmt
+            .query_map(params_from_iter(args), |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows
+            .into_iter()
+            .filter(|(_, usd, tok)| *usd != 0.0 || *tok > 0)
+            .collect())
+    }
 }
 
 impl Store {
@@ -597,6 +643,40 @@ mod tests {
             cost_usd: cost,
             cost_basis: "estimated".into(),
         }
+    }
+
+    #[test]
+    fn free_usage_groups_tokens_by_model_and_other_providers_exclude_mapped() {
+        let d = TempDir::new().unwrap();
+        let s = open(&d);
+        let mut rows = vec![
+            row("mac", "opencode", "2026-10-01", "deepseek-v4.1-flash", "deepseek", None),
+            row("mac", "opencode", "2026-10-02", "deepseek-v4.1-flash", "deepseek", None),
+            row("mac", "opencode", "2026-10-02", "muse-spark", "meta", None),
+            row("mac", "opencode", "2026-10-03", "kimi-k3", "moonshot", Some(4.0)),
+            row("mac", "pi", "2026-10-03", "gemini-x", "google", Some(0.5)),
+            row("old", "opencode", "2026-09-01", "muse-spark", "meta", None),
+        ];
+        for r in rows.iter_mut().take(3) {
+            r.cost_basis = "free".into();
+            r.input = 1_000_000;
+            r.output = 2_000_000;
+        }
+        rows[3].input = 500_000;
+        rows[4].output = 250_000;
+        s.upsert_rows(&rows, "2026-10-03T00:00:00+00:00").unwrap();
+
+        let free = s.free_usage("2026-10").unwrap();
+        assert_eq!(free[0], ("deepseek-v4.1-flash".into(), 6_000_014));
+        assert_eq!(free[1], ("muse-spark".into(), 3_000_007));
+        let others = s.other_provider_spend(&["deepseek"], "2026-10").unwrap();
+        assert_eq!(others.len(), 3, "meta free (0 custo, tokens) também entra");
+        assert_eq!(others[0], ("moonshot".into(), 4.0, 500_009));
+        assert_eq!(others[1], ("google".into(), 0.5, 250_008));
+        assert_eq!(others[2], ("meta".into(), 0.0, 3_000_007));
+        // Sem lista mapeada, todos aparecem; fora do mês nada entra.
+        assert_eq!(s.other_provider_spend(&[], "2026-10").unwrap().len(), 4);
+        assert!(s.free_usage("2026-09").unwrap().is_empty());
     }
 
     fn count(s: &Store, table: &str) -> i64 {

@@ -9,7 +9,7 @@ let package = Package(
         .executableTarget(
             name: "CostsPreview",
             sources: [
-                "AppModel.swift", "CostsPreviewApp.swift", "LoginService.swift",
+                "AppModel.swift", "ConsolidatedEnv.swift", "CostsPreviewApp.swift", "LoginService.swift",
                 "StartupSupport.swift", "Status.swift", "StatusLoader.swift", "Views.swift", "main.swift",
             ]
         ),

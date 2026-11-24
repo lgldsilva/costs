@@ -63,6 +63,7 @@ pub struct Fixture {
     home: tempfile::TempDir,
     cache: tempfile::TempDir,
     vars: RefCell<HashMap<String, String>>,
+    keychain_claude: RefCell<Option<String>>,
 }
 
 impl Env for Fixture {
@@ -73,6 +74,10 @@ impl Env for Fixture {
     fn home(&self) -> Option<PathBuf> {
         Some(self.home.path().to_path_buf())
     }
+
+    fn keychain_claude(&self) -> Option<String> {
+        self.keychain_claude.borrow().clone()
+    }
 }
 
 impl Fixture {
@@ -82,7 +87,14 @@ impl Fixture {
             home: tempfile::tempdir().unwrap(),
             cache: tempfile::tempdir().unwrap(),
             vars: RefCell::default(),
+            keychain_claude: RefCell::default(),
         }
+    }
+
+    /// Simula o item "Claude Code-credentials" do Keychain (mesmo JSON do arquivo).
+    pub fn with_keychain_claude(&self, json: &str) -> &Self {
+        *self.keychain_claude.borrow_mut() = Some(json.to_owned());
+        self
     }
 
     pub fn with_env(&self, k: &str, v: &str) -> &Self {

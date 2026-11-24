@@ -88,6 +88,7 @@ local CATALOG = {
   ["opencode-go"] = { name = "OpenCode Go", monogram = "OC", color = "#6E57CF" },
   ["deepseek"] = { name = "DeepSeek", monogram = "DS", color = "#4D6BFF" },
   ["openrouter"] = { name = "OpenRouter", monogram = "OR", color = "#66738C" },
+  ["antigravity"] = { name = "Antigravity", monogram = "AG", color = "#7B61FF" },
 }
 
 local SECONDARY = "on_surface_variant"

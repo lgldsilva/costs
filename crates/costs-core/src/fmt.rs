@@ -44,6 +44,9 @@ pub fn quota_error_hint(code: &str, provider: &str) -> Option<String> {
         "xai" => Some("grok login (ou use o grok/pi para renovar)"),
         _ => None,
     };
+    if code == "nocred" && provider == "antigravity" {
+        return Some("abra o Antigravity CLI: o statusline grava a cota local".to_owned());
+    }
     match (code, login) {
         ("nocred" | "expired" | "auth", Some(cmd)) => Some(format!("faça login: {cmd}")),
         ("nokey" | "auth", None) => Some("configure a API key (env ou auth.json do pi/opencode)".to_owned()),

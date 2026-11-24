@@ -721,6 +721,27 @@ mod tests {
     }
 
     #[test]
+    fn report_date_scopes_resolve_and_reject_ambiguity() {
+        let (_d, db) = fixture();
+        // Presets resolvem sem abrir rede nem exigir mês; saída textual é cronológica.
+        for args in [
+            vec!["report", "--period", "last-30-days"],
+            vec!["report", "--period", "this-week"],
+            vec!["report", "--last-days", "7"],
+            vec!["report", "--from", "2026-01-01", "--to", "2026-01-31"],
+        ] {
+            let combined: Vec<&str> = [&["--db", &db], &args[..]].concat();
+            let (code, out, err) = run_args(&combined);
+            assert_eq!(code, 0, "{args:?}: {err}");
+            assert!(out.contains("host") || out.contains("sem dados"), "{args:?}");
+        }
+        // Dois escopos de data juntos são rejeitados antes de qualquer leitura.
+        let (code, _, err) = run_args(&["--db", &db, "report", "--month", "2026-10", "--last-days", "5"]);
+        assert_eq!(code, 1);
+        assert!(err.contains("ambiguous date selection"), "{err}");
+    }
+
+    #[test]
     fn html_output_is_offline_and_accepts_filter_aliases() {
         let (d, db) = fixture();
         let cfg = d.path().join("config.toml");

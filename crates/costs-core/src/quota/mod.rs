@@ -1,6 +1,7 @@
-//! Cota/saldo nativos de 7 providers (port de `ai-usage`): claude, codex, zai,
-//! opencode-go, xai, deepseek, openrouter. Formato de cache v1 compatível.
+//! Cota/saldo nativos (port de `ai-usage`): claude, codex, zai, opencode-go, xai,
+//! deepseek, openrouter e antigravity (local, sem rede). Cache v1 compatível.
 
+mod antigravity;
 mod cache;
 mod claude;
 mod codex;
@@ -26,7 +27,16 @@ pub use env::{Env, HttpClient, HttpError, RealEnv, UreqClient};
 use creds::{Ctx, Failure};
 
 /// Providers suportados.
-pub const PROVIDERS: [&str; 7] = ["claude", "codex", "zai", "opencode-go", "xai", "deepseek", "openrouter"];
+pub const PROVIDERS: [&str; 8] = [
+    "claude",
+    "codex",
+    "zai",
+    "opencode-go",
+    "xai",
+    "deepseek",
+    "openrouter",
+    "antigravity",
+];
 
 fn run_provider(provider: &str, ctx: &Ctx) -> Result<Partial, Failure> {
     match provider {
@@ -37,6 +47,7 @@ fn run_provider(provider: &str, ctx: &Ctx) -> Result<Partial, Failure> {
         "xai" => xai::fetch(ctx),
         "deepseek" => deepseek::fetch(ctx),
         "openrouter" => openrouter::fetch(ctx),
+        "antigravity" => antigravity::fetch(ctx),
         _ => Err(Failure::NoCred),
     }
 }
@@ -68,6 +79,7 @@ pub fn fetch(provider: &str, now: i64, http: &dyn HttpClient, env: &dyn Env, ref
         env,
         now,
         enrich_resets,
+        cache_dir,
     };
     let entry = match run_provider(provider, &ctx) {
         Ok(p) => cache::apply_partial(prev.as_ref(), provider, p, now),

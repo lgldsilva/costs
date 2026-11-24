@@ -10,6 +10,8 @@ const URL: &str = "https://api.anthropic.com/api/oauth/usage";
 /// Pede o bloco `cedar_ember` ("Reset for free" do Claude). Não documentado: se a API
 /// recusar, a consulta é refeita sem ele para não perder as janelas.
 const URL_WITH_RESETS: &str = "https://api.anthropic.com/api/oauth/usage?cedar_ember=1";
+/// Plano contratado (Pro/Max) e tier de rate limit da conta.
+const PROFILE_URL: &str = "https://api.anthropic.com/api/oauth/profile";
 /// Acima disso o bloco é tratado como lixo (mesmo limite do CodexBar).
 const MAX_RESETS: i64 = 50;
 const MAX_GRANTS: usize = 200;
@@ -36,18 +38,27 @@ fn token_from(ctx: &Ctx, raw: &Value, pi: bool) -> Result<String, Failure> {
     }
 }
 
-fn claude_creds(ctx: &Ctx) -> Option<Value> {
+/// Candidatos de credencial: arquivo `~/.claude/.credentials.json` e, no macOS, o
+/// item "Claude Code-credentials" do Keychain. O login mais recente pode estar em
+/// qualquer um dos dois (o access token do arquivo expira em horas e o /login pode
+/// renovar só o Keychain), então quem escolhe é a validade do token, não a ordem.
+fn claude_creds_candidates(ctx: &Ctx) -> Vec<Value> {
     let dir = ctx
         .env
         .var("CLAUDE_CONFIG_DIR")
         .map(std::path::PathBuf::from)
-        .or_else(|| ctx.home_file(".claude"))?;
-    let file = dir.join(".credentials.json");
-    if file.exists() {
-        read_json(file)
-    } else {
-        serde_json::from_str(&ctx.env.keychain_claude()?).ok()
+        .or_else(|| ctx.home_file(".claude"));
+    let mut out = Vec::new();
+    if let Some(dir) = dir {
+        let file = dir.join(".credentials.json");
+        if file.exists() {
+            out.extend(read_json(file));
+        }
     }
+    if let Some(raw) = ctx.env.keychain_claude() {
+        out.extend(serde_json::from_str::<Value>(&raw).ok());
+    }
+    out
 }
 
 fn pick_token(ctx: &Ctx) -> Result<String, Failure> {
@@ -59,8 +70,14 @@ fn pick_token(ctx: &Ctx) -> Result<String, Failure> {
             None => {}
         }
     }
-    let creds = claude_creds(ctx).ok_or(failure)?;
-    token_from(ctx, &creds, false).map_err(|f| f.most_specific(failure))
+    let mut combined = failure;
+    for creds in claude_creds_candidates(ctx) {
+        match token_from(ctx, &creds, false) {
+            Ok(t) => return Ok(t),
+            Err(f) => combined = combined.most_specific(f),
+        }
+    }
+    Err(combined)
 }
 
 fn used_window(x: &Value, label: &str) -> Option<Window> {
@@ -162,12 +179,42 @@ pub fn fetch(ctx: &Ctx) -> Result<Partial, Failure> {
     let v: Value = serde_json::from_str(&body).map_err(|_| Failure::Parse)?;
     let mut partial = parse(&v).ok_or(Failure::Parse)?;
     partial.reset_credits = parse_resets(&v, ctx.now);
+    // Plano contratado: best-effort; falha do profile não derruba as janelas.
+    partial.plan = Some(
+        ctx.get(PROFILE_URL, &headers)
+            .ok()
+            .and_then(|b| serde_json::from_str::<Value>(&b).ok())
+            .and_then(|v| plan_from_profile(&v)),
+    );
     Ok(partial)
+}
+
+/// `rate_limit_tier` do profile (ex.: `default_claude_max_5x`) → rótulo de plano.
+fn plan_from_profile(v: &Value) -> Option<String> {
+    let tier = v
+        .get("organization")?
+        .get("rate_limit_tier")?
+        .as_str()?
+        .to_ascii_lowercase();
+    if tier.contains("max_20x") {
+        Some("Max 20x".into())
+    } else if tier.contains("max_5x") {
+        Some("Max 5x".into())
+    } else if tier.contains("max") {
+        Some("Max".into())
+    } else if tier.contains("pro") {
+        Some("Pro".into())
+    } else if tier.contains("free") {
+        Some("free".into())
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::quota::testutil::*;
+    use serde_json::json;
 
     // Fixture assembled at runtime so credential scanners do not read the fake
     // token as a hardcoded secret (CWE-798).
@@ -266,6 +313,76 @@ mod tests {
             &cred().replace("99999999999999", &exp.to_string()),
         );
         assert_eq!(t.run("claude", &FakeHttp::new()).error.as_deref(), Some("expired"));
+    }
+
+    #[test]
+    fn keychain_recovers_when_file_token_expired() {
+        let t = Fixture::new();
+        let expired = cred().replace("99999999999999", &(t.now - 30).to_string());
+        t.write_home(".claude/.credentials.json", &expired);
+        t.with_keychain_claude(&cred());
+        let http = FakeHttp::new().route("https://api.anthropic.com/", 200, BODY);
+        let e = t.run("claude", &http);
+        assert!(e.ok, "{e:?}");
+        assert!(http.header_seen("Authorization", "Bearer sekret-tok"));
+    }
+
+    #[test]
+    fn valid_file_token_wins_over_keychain() {
+        let t = Fixture::new();
+        t.write_home(".claude/.credentials.json", &cred());
+        t.with_keychain_claude(&cred().replace("sekret-tok", "keychain-tok"));
+        let http = FakeHttp::new().route("https://api.anthropic.com/", 200, BODY);
+        let e = t.run("claude", &http);
+        assert!(e.ok, "{e:?}");
+        assert!(http.header_seen("Authorization", "Bearer sekret-tok"));
+        assert!(!http.header_seen("Authorization", "Bearer keychain-tok"));
+    }
+
+    #[test]
+    fn profile_tiers_map_to_labels() {
+        use super::plan_from_profile;
+        let j = |t: &str| json!({"organization": {"rate_limit_tier": t}});
+        assert_eq!(
+            plan_from_profile(&j("default_claude_max_5x")).as_deref(),
+            Some("Max 5x")
+        );
+        assert_eq!(
+            plan_from_profile(&j("default_claude_max_20x")).as_deref(),
+            Some("Max 20x")
+        );
+        assert_eq!(plan_from_profile(&j("default_claude_max")).as_deref(), Some("Max"));
+        assert_eq!(plan_from_profile(&j("claude_pro")).as_deref(), Some("Pro"));
+        assert_eq!(plan_from_profile(&j("free")).as_deref(), Some("free"));
+        assert_eq!(plan_from_profile(&json!({"account": {"has_claude_max": true}})), None);
+    }
+
+    #[test]
+    fn plan_comes_from_oauth_profile_best_effort() {
+        let t = Fixture::new();
+        t.write_home(".claude/.credentials.json", &cred());
+        let http = FakeHttp::new()
+            .route(
+                super::PROFILE_URL,
+                200,
+                r#"{"organization":{"rate_limit_tier":"default_claude_max_5x"},"account":{"has_claude_max":true,"has_claude_pro":false}}"#,
+            )
+            .route("https://api.anthropic.com/", 200, BODY);
+        let e = t.run("claude", &http);
+        assert!(e.ok, "{e:?}");
+        assert_eq!(e.plan.as_deref(), Some("Max 5x"));
+    }
+
+    #[test]
+    fn profile_failure_keeps_windows_and_no_plan() {
+        let t = Fixture::new();
+        t.write_home(".claude/.credentials.json", &cred());
+        let http = FakeHttp::new()
+            .route(super::PROFILE_URL, 500, "x")
+            .route("https://api.anthropic.com/", 200, BODY);
+        let e = t.run("claude", &http);
+        assert!(e.ok, "{e:?}");
+        assert_eq!(e.plan, None);
     }
 
     #[test]

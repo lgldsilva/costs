@@ -1,6 +1,5 @@
 //! Saída legada do SwiftBar (`costs menubar`), igual à do `menubar.py`.
 
-use std::collections::HashMap;
 use std::io::{self, Write};
 
 use costs_core::config::Config;
@@ -30,6 +29,7 @@ fn provider_name(provider: &str) -> &str {
         "zai" => "z.ai",
         "xai" => "xAI",
         "opencode-go" => "OpenCode Go",
+        "antigravity" => "Antigravity",
         other => other,
     }
 }
@@ -153,24 +153,42 @@ fn header(out: &mut dyn Write, c: &MenuCtx, spend: f64) -> Result<(), Box<dyn st
         detail(out, &format!("{host} / {agent} · {source_age}{status}"), None)?;
     }
     let subs = &c.cfg.subscriptions;
-    if !subs.is_empty() {
-        let fixed: f64 = subs.iter().map(|s| s.monthly_usd).sum();
+    let sub_rows = subscription_rows(c);
+    if !subs.is_empty() || sub_rows.iter().any(|r| r.discovered) {
+        let fixed: f64 = sub_rows.iter().map(|r| r.counted_monthly).fold(0.0, |a, b| a + b);
         let total = format!("Assinaturas · US$ {}/mês", commas(fixed, 2));
         writeln!(out, "{}", menu_line(&total, None))?;
-        for s in subs {
-            let line = format!("--{} · US$ {}/mês", s.name, commas(s.monthly_usd, 2));
+        for row in &sub_rows {
+            let monthly = row.usd_month.map(|v| format!("US$ {}/mês", commas(v, 2)));
+            let configured = row.configured.map(|v| format!("US$ {}/mês", commas(v, 2)));
+            let line = match row.state {
+                crate::subs::SubscriptionState::Free => match monthly.or(configured) {
+                    Some(m) => format!("--{} · plano free ({m} não somado)", row.name),
+                    None => format!("--{} · plano free", row.name),
+                },
+                crate::subs::SubscriptionState::Lapsed => match monthly.or(configured) {
+                    Some(m) => format!("--{} · assinatura inativa ({m} não somado)", row.name),
+                    None => format!("--{} · assinatura inativa", row.name),
+                },
+                _ => match monthly {
+                    Some(m) if row.discovered => {
+                        format!("--{} · {m} (plano {} detectado)", row.name, row.plan.unwrap_or("ativo"))
+                    }
+                    Some(m) => format!("--{} · {m}", row.name),
+                    None => format!(
+                        "--{} · plano {} ativo (preço n/d)",
+                        row.name,
+                        row.plan.unwrap_or("ativo")
+                    ),
+                },
+            };
             writeln!(out, "{}", menu_line(&line, Some("font=Menlo size=11")))?;
         }
     }
     Ok(())
 }
 
-fn provider_block(
-    out: &mut dyn Write,
-    c: &MenuCtx,
-    idx: usize,
-    sub_by_provider: &HashMap<&str, f64>,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn provider_block(out: &mut dyn Write, c: &MenuCtx, idx: usize) -> Result<(), Box<dyn std::error::Error>> {
     let provider = c.cfg.quota.providers[idx].as_str();
     let entry = &c.entries[idx];
     let (cost_total, by_agent) = match c.cfg.quota.cost_map.get(provider) {
@@ -198,7 +216,12 @@ fn provider_block(
             .join(" · ")
             + " usado"
     };
-    let title = format!("{} · {usage}{stale}", provider_name(provider));
+    let plan = crate::subs::entry_plan(entry);
+    let titled = match plan {
+        Some(p) => format!("{} ({p})", provider_name(provider)),
+        None => provider_name(provider).to_owned(),
+    };
+    let title = format!("{titled} · {usage}{stale}");
     writeln!(out, "{}", menu_line(&title, None))?;
     detail(
         out,
@@ -208,8 +231,21 @@ fn provider_block(
         ),
         None,
     )?;
-    if let Some(monthly) = sub_by_provider.get(provider) {
-        detail(out, &format!("Assinatura · US$ {}/mês", commas(*monthly, 2)), None)?;
+    if let Some(r) = crate::subs::resolve(provider, Some(entry), &c.cfg.subscriptions) {
+        let line = match r.state {
+            crate::subs::SubscriptionState::Free => match r.usd_month.or(r.configured) {
+                Some(v) => format!("Assinatura · plano free (US$ {}/mês não somado)", commas(v, 2)),
+                None => "Assinatura · plano free".to_owned(),
+            },
+            crate::subs::SubscriptionState::Lapsed => {
+                "Assinatura · inativa (credencial recusada, não renovada)".to_owned()
+            }
+            _ => match r.usd_month {
+                Some(v) => format!("Assinatura · US$ {}/mês", commas(v, 2)),
+                None => format!("Assinatura · plano {} ativo (preço n/d)", plan.unwrap_or("ativo")),
+            },
+        };
+        detail(out, &line, None)?;
     }
     if let Some(b) = balance {
         detail(out, &format!("Saldo disponível · {}", fmt_balance(b)), None)?;
@@ -322,16 +358,141 @@ fn footer(out: &mut dyn Write, exe: &str, month: &str) -> io::Result<()> {
 }
 
 /// Escreve o menu completo.
+/// Linha de assinatura para o menu: configurada ou descoberta pela detecção.
+struct SubRow<'a> {
+    name: String,
+    plan: Option<&'a str>,
+    state: crate::subs::SubscriptionState,
+    usd_month: Option<f64>,
+    configured: Option<f64>,
+    counted_monthly: f64,
+    discovered: bool,
+}
+
+/// Assinaturas a listar: as configuradas (todas, com o estado detectado) mais
+/// planos pagos descobertos que ainda não têm entrada no config.
+fn subscription_rows<'a>(c: &'a MenuCtx) -> Vec<SubRow<'a>> {
+    let mut rows = Vec::new();
+    for s in &c.cfg.subscriptions {
+        let resolved = s.provider.as_deref().and_then(|p| {
+            crate::subs::resolve(
+                p,
+                crate::subs::entry_for(p, &c.cfg.quota.providers, c.entries),
+                &c.cfg.subscriptions,
+            )
+        });
+        let plan = s
+            .provider
+            .as_deref()
+            .and_then(|p| crate::subs::entry_for(p, &c.cfg.quota.providers, c.entries))
+            .and_then(crate::subs::entry_plan);
+        match resolved {
+            Some(r) => rows.push(SubRow {
+                name: s.name.clone(),
+                plan,
+                state: r.state,
+                usd_month: r.usd_month,
+                configured: r.configured,
+                counted_monthly: r.counted_monthly(),
+                discovered: false,
+            }),
+            None => rows.push(SubRow {
+                name: s.name.clone(),
+                plan,
+                state: crate::subs::SubscriptionState::Active,
+                usd_month: Some(s.monthly_usd),
+                configured: Some(s.monthly_usd),
+                counted_monthly: s.monthly_usd,
+                discovered: false,
+            }),
+        }
+    }
+    for provider in &c.cfg.quota.providers {
+        let configured = c
+            .cfg
+            .subscriptions
+            .iter()
+            .any(|s| s.provider.as_deref() == Some(provider.as_str()));
+        if configured {
+            continue;
+        }
+        let entry = crate::subs::entry_for(provider, &c.cfg.quota.providers, c.entries);
+        if let Some(r) = crate::subs::resolve(provider, entry, &c.cfg.subscriptions)
+            && r.state == crate::subs::SubscriptionState::Active
+            && r.usd_month.is_some()
+        {
+            rows.push(SubRow {
+                name: provider_name(provider).to_owned(),
+                plan: entry.and_then(crate::subs::entry_plan),
+                state: r.state,
+                usd_month: r.usd_month,
+                configured: r.configured,
+                counted_monthly: r.counted_monthly(),
+                discovered: true,
+            });
+        }
+    }
+    rows
+}
+
+/// Nome de exibição de provedor de custo fora dos blocos de quota.
+fn cost_provider_name(provider: &str) -> &str {
+    match provider {
+        "moonshot" => "Moonshot (Kimi)",
+        "meta" => "Meta",
+        "google" => "Google",
+        "alibaba" => "Alibaba (Qwen)",
+        "cursor" => "Cursor",
+        "outro" => "outros (sem preço)",
+        other => other,
+    }
+}
+
+/// Provedores com custo/uso no mês que não têm bloco próprio (fora do cost_map).
+fn other_providers_block(out: &mut dyn Write, c: &MenuCtx) -> Result<(), Box<dyn std::error::Error>> {
+    let mapped: Vec<&str> = c.cfg.quota.cost_map.values().flatten().map(String::as_str).collect();
+    let others = c.store.other_provider_spend(&mapped, c.month)?;
+    if others.is_empty() {
+        return Ok(());
+    }
+    let total = others.iter().fold(0.0, |a, r| a + r.1);
+    let title = format!("Outros provedores · US$ {}/mês", commas(total, 2));
+    writeln!(out, "{}", menu_line(&title, None))?;
+    for (provider, usd, tok) in &others {
+        let line = format!(
+            "--{} · US$ {} · {} M tokens",
+            cost_provider_name(provider),
+            commas(*usd, 2),
+            commas(*tok as f64 / TOKENS_PER_MILLION, 1)
+        );
+        writeln!(out, "{}", menu_line(&line, Some("font=Menlo size=11")))?;
+    }
+    Ok(())
+}
+
+/// Bônus: uso registrado sem custo (modelos `:free`/`-free`) por volume de tokens.
+fn free_bonus_block(out: &mut dyn Write, c: &MenuCtx) -> Result<(), Box<dyn std::error::Error>> {
+    let models = c.store.free_usage(c.month)?;
+    let total: i64 = models.iter().map(|(_, t)| *t).sum();
+    if total == 0 {
+        return Ok(());
+    }
+    let title = format!(
+        "Bônus free · {} M tokens sem custo",
+        commas(total as f64 / TOKENS_PER_MILLION, 1)
+    );
+    writeln!(out, "{}", menu_line(&title, None))?;
+    for (model, tok) in models.iter().take(3) {
+        let line = format!("--{} · {} M tokens", model, commas(*tok as f64 / TOKENS_PER_MILLION, 1));
+        writeln!(out, "{}", menu_line(&line, Some("font=Menlo size=11")))?;
+    }
+    Ok(())
+}
+
 pub fn render(out: &mut dyn Write, c: &MenuCtx) -> Result<(), Box<dyn std::error::Error>> {
     let spend = c.store.month_spend(c.month)?;
     header(out, c, spend)?;
     writeln!(out, "---")?;
-    let sub_by_provider: HashMap<&str, f64> = c
-        .cfg
-        .subscriptions
-        .iter()
-        .filter_map(|s| Some((s.provider.as_deref()?, s.monthly_usd)))
-        .collect();
     let order = priorities(c);
     let usable: Vec<&str> = order
         .iter()
@@ -352,8 +513,10 @@ pub fn render(out: &mut dyn Write, c: &MenuCtx) -> Result<(), Box<dyn std::error
     }
     writeln!(out, "---")?;
     for (idx, _) in &order {
-        provider_block(out, c, *idx, &sub_by_provider)?;
+        provider_block(out, c, *idx)?;
     }
+    other_providers_block(out, c)?;
+    free_bonus_block(out, c)?;
     writeln!(out, "---")?;
     footer(out, c.exe, c.month)?;
     Ok(())
@@ -453,6 +616,24 @@ monthly_usd = 10.0
         render_with_usage(entries, horizon_s, &[])
     }
 
+    fn render_cfg(cfg: &str, entries: Vec<Value>) -> String {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("s.sqlite"), "", utc_now()).unwrap();
+        let cfg = parse_config(cfg).unwrap();
+        let ctx = MenuCtx {
+            store: &store,
+            cfg: &cfg,
+            entries: &entries,
+            now: 1000.0,
+            month: "2026-10",
+            horizon_s: 86_400.0,
+            exe: "/bin/costs",
+        };
+        let mut out = Vec::new();
+        render(&mut out, &ctx).unwrap();
+        String::from_utf8(out).unwrap()
+    }
+
     fn render_with_usage(entries: Vec<Value>, horizon_s: f64, rows: &[costs_core::model::Row]) -> String {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(&dir.path().join("s.sqlite"), "", utc_now()).unwrap();
@@ -489,6 +670,120 @@ monthly_usd = 10.0
         assert!(text.contains("z.ai · cotas n/d · desatualizado"));
         assert!(text.contains("--Assinatura · US$ 10.00/mês"));
         assert!(text.contains("bash='/bin/costs' param1=sync"));
+    }
+
+    #[test]
+    fn free_plan_subscription_is_not_summed() {
+        let text = render_with(
+            vec![
+                json!({"ok": true, "balance": {"amount": 5.0, "currency": "USD"}}),
+                json!({"ok": true, "plan": "free"}),
+            ],
+            SECS_PER_DAY,
+        );
+        assert!(text.contains("Assinaturas · US$ 0.00/mês"), "{text}");
+        assert!(
+            text.contains("--Plano / X · plano free (US$ 10.00/mês não somado) | font=Menlo size=11"),
+            "{text}"
+        );
+        assert!(
+            text.contains("--Assinatura · plano free (US$ 10.00/mês não somado)"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn paid_plan_without_config_is_listed_as_discovered() {
+        let text = render_cfg(
+            r#"
+[quota]
+providers = ["codex", "zai"]
+[[hosts]]
+name = "mac"
+"#,
+            vec![json!({"plan": "plus"}), json!({})],
+        );
+        assert!(text.contains("Assinaturas · US$ 20.00/mês"), "{text}");
+        assert!(
+            text.contains("--Codex · US$ 20.00/mês (plano plus detectado) | font=Menlo size=11"),
+            "{text}"
+        );
+        assert!(text.contains("Codex (plus) ·"), "{text}");
+        assert!(text.contains("--Assinatura · US$ 20.00/mês"), "{text}");
+    }
+
+    #[test]
+    fn other_providers_and_free_bonus_get_readable_sections() {
+        let usage = |provider: &str, model: &str, basis: &str, cost: Option<f64>, tokens: i64| costs_core::model::Row {
+            host: "mac".to_owned(),
+            agent: "opencode".to_owned(),
+            date: "2026-10-01".to_owned(),
+            model: model.to_owned(),
+            model_raw: model.to_owned(),
+            provider: provider.to_owned(),
+            input: tokens,
+            output: 0,
+            cache_read: 0,
+            cache_write: 0,
+            cost_usd: cost,
+            cost_basis: basis.to_owned(),
+        };
+        let text = render_with_usage(
+            vec![json!({}), json!({})],
+            SECS_PER_DAY,
+            &[
+                usage("moonshot", "kimi-k3", "reported", Some(4.04), 3_000_000),
+                usage("deepseek", "deepseek-v4.1-flash", "free", None, 37_000_000),
+                usage("meta", "muse-spark", "free", None, 12_000_000),
+                usage("deepseek", "deepseek-chat", "reported", Some(2.96), 1_000_000),
+            ],
+        );
+        assert!(text.contains("Outros provedores · US$ 4.04/mês"), "{text}");
+        assert!(text.contains("--Moonshot (Kimi) · US$ 4.04 · 3.0 M tokens"), "{text}");
+        assert!(text.contains("Bônus free · 49.0 M tokens sem custo"), "{text}");
+        assert!(text.contains("--deepseek-v4.1-flash · 37.0 M tokens"), "{text}");
+        assert!(text.contains("--muse-spark · 12.0 M tokens"), "{text}");
+    }
+
+    #[test]
+    fn unknown_tabled_plan_shows_no_price_instead_of_stale_config() {
+        let text = render_cfg(
+            r#"
+[quota]
+providers = ["codex"]
+[[hosts]]
+name = "mac"
+[[subscriptions]]
+name = "Codex"
+provider = "codex"
+monthly_usd = 20.0
+"#,
+            vec![json!({"plan": "go", "ok": true})],
+        );
+        assert!(text.contains("Assinaturas · US$ 0.00/mês"), "{text}");
+        assert!(text.contains("--Codex · plano go ativo (preço n/d)"), "{text}");
+    }
+
+    #[test]
+    fn refused_subscription_only_provider_is_lapsed() {
+        let text = render_cfg(
+            r#"
+[quota]
+providers = ["opencode-go"]
+[[hosts]]
+name = "mac"
+[[subscriptions]]
+name = "OpenCode Go"
+provider = "opencode-go"
+monthly_usd = 10.0
+"#,
+            vec![json!({"ok": false, "error": "auth"})],
+        );
+        assert!(text.contains("Assinaturas · US$ 0.00/mês"), "{text}");
+        assert!(
+            text.contains("--OpenCode Go · assinatura inativa (US$ 10.00/mês não somado) | font=Menlo size=11"),
+            "{text}"
+        );
     }
 
     #[test]
